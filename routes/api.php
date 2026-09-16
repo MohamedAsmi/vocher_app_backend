@@ -11,6 +11,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::delete('/logout', [AuthController::class, 'logout']);
+    Route::get('/organizations/{org}/expense-categories', [VoucherController::class, 'categories']);
     Route::post('/organizations/{org}/outlets/{outlet}/vouchers/today', [VoucherController::class, 'today']);
     Route::put('/organizations/{org}/vouchers/{voucher}', [VoucherController::class, 'update']);
     Route::post('/organizations/{org}/vouchers/{voucher}/submit', [VoucherController::class, 'submitForReview']);

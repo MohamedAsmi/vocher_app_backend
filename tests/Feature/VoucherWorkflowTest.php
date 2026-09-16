@@ -106,6 +106,29 @@ class VoucherWorkflowTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_manager_only_receives_active_expense_categories(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        DB::table('expense_categories')
+            ->where('organization_id', 'demo-org')
+            ->where('id', 'transport')
+            ->update(['active' => false]);
+
+        $token = $this->postJson('/api/login', [
+            'email' => 'manager@example.test',
+            'password' => 'ChangeMe123!',
+            'deviceName' => 'category-filter-test',
+        ])->assertOk()->json('token');
+
+        $categories = $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/organizations/demo-org/expense-categories')
+            ->assertOk()
+            ->json();
+
+        $this->assertNotContains('transport', array_column($categories, 'id'));
+        $this->assertContains('raw_materials', array_column($categories, 'id'));
+    }
+
     public function test_admin_can_manage_users_and_outlet_access(): void
     {
         $this->seed(DatabaseSeeder::class);

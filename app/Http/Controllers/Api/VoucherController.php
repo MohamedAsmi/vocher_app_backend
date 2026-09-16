@@ -15,6 +15,29 @@ class VoucherController extends Controller
 {
     public function __construct(private VoucherAccounting $accounting) {}
 
+    public function categories(Request $request, string $org): JsonResponse
+    {
+        abort_unless(DB::table('organization_user')->where([
+            'organization_id' => $org,
+            'user_id' => $request->user()->id,
+            'active' => true,
+        ])->exists(), 403);
+
+        return response()->json(
+            DB::table('expense_categories')
+                ->where('organization_id', $org)
+                ->where('active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn ($category) => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                ])
+                ->values()
+        );
+    }
+
     public function today(Request $request, string $org, string $outlet): JsonResponse
     {
         $this->manager($request, $org, $outlet);
