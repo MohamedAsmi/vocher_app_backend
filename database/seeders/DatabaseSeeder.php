@@ -30,9 +30,9 @@ class DatabaseSeeder extends Seeder
         // foreach ([$manager->id, $bookkeeper->id] as $id) {
         //     DB::table('outlet_user')->updateOrInsert(['outlet_id' => 'outlet_001', 'user_id' => $id], ['active' => true, 'updated_at' => now(), 'created_at' => now()]);
         // }
-        // foreach ([['raw_materials', 'Raw Materials', '5100'], ['packaging', 'Packaging', '5200'], ['utilities', 'Gas/Electricity/Water', '5300'], ['wages', 'Wages', '5400'], ['transport', 'Transport', '5500'], ['repairs', 'Repairs', '5600']] as $i => [$id, $name, $code]) {
-        //     DB::table('expense_categories')->updateOrInsert(['id' => $id], ['organization_id' => 'demo-org', 'name' => $name, 'account_code' => $code, 'account_name' => $name, 'sort_order' => $i, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
-        // }
+        foreach ([['raw_materials', 'Raw Materials', '5100'], ['packaging', 'Packaging', '5200'], ['utilities', 'Gas/Electricity/Water', '5300'], ['wages', 'Wages', '5400'], ['transport', 'Transport', '5500'], ['repairs', 'Repairs', '5600']] as $i => [$id, $name, $code]) {
+            DB::table('expense_categories')->updateOrInsert(['id' => $id], ['organization_id' => 'demo-org', 'name' => $name, 'account_code' => $code, 'account_name' => $name, 'sort_order' => $i, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
+        }
         // DB::table('opening_floats')->updateOrInsert(['outlet_id' => 'outlet_001'], ['amount_minor' => 50000, 'updated_at' => now(), 'created_at' => now()]);
     }
 }
