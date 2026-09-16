@@ -104,6 +104,8 @@ class BookkeeperController extends Controller
             'outletName' => $row->outlet_name,
             'dateKey' => $row->date_key,
             'status' => $row->status,
+            'createdAt' => $row->created_at,
+            'approvedAt' => in_array($row->status, ['posted', 'variance'], true) ? $row->posted_at : null,
             'openingFloatMinor' => (int) $row->opening_float_minor,
             'cashSalesMinor' => (int) $row->cash_sales_minor,
             'cardSalesMinor' => (int) $row->card_sales_minor,
