@@ -68,7 +68,7 @@ return new class extends Migration
             $table->string('organization_id');
             $table->string('outlet_id');
             $table->char('date_key', 8);
-            $table->enum('status', ['open', 'posted', 'variance'])->default('open');
+            $table->enum('status', ['open', 'pending_review', 'posted', 'variance'])->default('open');
             $table->bigInteger('opening_float_minor')->default(0);
             $table->bigInteger('cash_sales_minor')->default(0);
             $table->bigInteger('card_sales_minor')->default(0);

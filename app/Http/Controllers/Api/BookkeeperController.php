@@ -9,6 +9,38 @@ use Illuminate\Support\Facades\DB;
 
 class BookkeeperController extends Controller
 {
+    public function approve(Request $request, string $org, string $voucher): JsonResponse
+    {
+        return response()->json(DB::transaction(function () use ($request, $org, $voucher) {
+            $row = DB::table('vouchers')
+                ->where('organization_id', $org)
+                ->where('id', $voucher)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($row, 404);
+            $this->bookkeeper($request, $org, $row->outlet_id);
+            abort_if($row->status !== 'pending_review', 409, 'Voucher is not pending review.');
+
+            $status = (int) $row->variance_minor === 0 ? 'posted' : 'variance';
+            DB::table('vouchers')->where('id', $voucher)->update([
+                'status' => $status,
+                'posted_by' => $request->user()->id,
+                'posted_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('audit_events')->insert([
+                'voucher_id' => $voucher,
+                'actor_id' => $request->user()->id,
+                'action' => 'VOUCHER_APPROVED_AND_POSTED',
+                'payload' => json_encode(['status' => $status]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return $this->voucher($voucher);
+        }, 3));
+    }
+
     public function reviews(Request $request, string $org): JsonResponse
     {
         $dateKey = $request->validate(['dateKey' => ['required', 'date_format:Ymd']])['dateKey'];
@@ -17,7 +49,7 @@ class BookkeeperController extends Controller
         $outlets = DB::table('outlets')->when($role !== 'admin', fn ($q) => $q->join('outlet_user', 'outlet_user.outlet_id', '=', 'outlets.id')->where('outlet_user.user_id', $request->user()->id)->where('outlet_user.active', true))->where('outlets.organization_id', $org)->select('outlets.*')->get();
 
         return response()->json($outlets->map(function ($outlet) use ($dateKey) {
-            $voucher = DB::table('vouchers')->where(['outlet_id' => $outlet->id, 'date_key' => $dateKey])->whereIn('status', ['posted', 'variance'])->first();
+            $voucher = DB::table('vouchers')->where(['outlet_id' => $outlet->id, 'date_key' => $dateKey])->whereIn('status', ['pending_review', 'posted', 'variance'])->first();
 
             return [
                 'outletId' => $outlet->id,
@@ -39,6 +71,23 @@ class BookkeeperController extends Controller
         DB::table('follow_ups')->updateOrInsert(['voucher_id' => $voucher], ['outlet_id' => $row->outlet_id, 'flagged_by' => $request->user()->id, 'status' => $data['open'] ? 'open' : 'resolved', 'reason' => $data['reason'] ?? null, 'updated_at' => now(), 'created_at' => now()]);
 
         return response()->json(['ok' => true]);
+    }
+
+    private function bookkeeper(Request $request, string $org, string $outlet): void
+    {
+        $role = DB::table('organization_user')->where([
+            'organization_id' => $org,
+            'user_id' => $request->user()->id,
+            'active' => true,
+        ])->value('role');
+        abort_unless(in_array($role, ['admin', 'bookkeeper'], true), 403, 'Bookkeeper access is required.');
+        if ($role !== 'admin') {
+            abort_unless(DB::table('outlet_user')->where([
+                'outlet_id' => $outlet,
+                'user_id' => $request->user()->id,
+                'active' => true,
+            ])->exists(), 403, 'This outlet is not assigned to the bookkeeper.');
+        }
     }
 
     private function voucher(string $id): array

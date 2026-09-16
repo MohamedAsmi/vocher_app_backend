@@ -54,22 +54,25 @@ class VoucherWorkflowTest extends TestCase
             ])->assertOk();
 
         $operationId = (string) Str::uuid();
-        $posted = $this->withHeaders($manager)
-            ->postJson("/api/organizations/demo-org/vouchers/{$voucher['id']}/post", ['operationId' => $operationId])
+        $submitted = $this->withHeaders($manager)
+            ->postJson("/api/organizations/demo-org/vouchers/{$voucher['id']}/submit", ['operationId' => $operationId])
             ->assertOk()
-            ->assertJsonPath('status', 'posted')
+            ->assertJsonPath('status', 'pending_review')
             ->json();
-        $this->assertSame(140000, $posted['countedCashMinor']);
+        $this->assertSame(140000, $submitted['countedCashMinor']);
 
         $this->withHeaders($manager)
-            ->postJson("/api/organizations/demo-org/vouchers/{$voucher['id']}/post", ['operationId' => $operationId])
+            ->postJson("/api/organizations/demo-org/vouchers/{$voucher['id']}/submit", ['operationId' => $operationId])
             ->assertOk()
-            ->assertJsonPath('status', 'posted');
+            ->assertJsonPath('status', 'pending_review');
         $this->withHeaders($manager)
             ->deleteJson('/api/organizations/demo-org/receipts', [
                 'receiptId' => "receipts/demo-org/{$voucher['id']}/evidence.jpg",
             ])
             ->assertConflict();
+        $this->withHeaders($manager)
+            ->postJson("/api/organizations/demo-org/bookkeeper/vouchers/{$voucher['id']}/approve")
+            ->assertForbidden();
 
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();
@@ -82,7 +85,16 @@ class VoucherWorkflowTest extends TestCase
             ->getJson('/api/organizations/demo-org/bookkeeper/reviews?dateKey='.$voucher['dateKey'])
             ->assertOk()
             ->assertJsonPath('0.voucher.id', $voucher['id'])
+            ->assertJsonPath('0.voucher.status', 'pending_review')
             ->assertJsonPath('0.voucher.expenses.0.id', $expenseId);
+        $this->withHeader('Authorization', "Bearer {$bookkeeperToken}")
+            ->postJson("/api/organizations/demo-org/bookkeeper/vouchers/{$voucher['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('status', 'posted');
+        $this->assertDatabaseHas('audit_events', [
+            'voucher_id' => $voucher['id'],
+            'action' => 'VOUCHER_APPROVED_AND_POSTED',
+        ]);
 
         $this->assertDatabaseHas('journals', ['voucher_id' => $voucher['id'], 'account_name' => 'Sales Revenue']);
         $this->assertDatabaseHas('opening_floats', ['outlet_id' => 'outlet_001', 'amount_minor' => 140000]);

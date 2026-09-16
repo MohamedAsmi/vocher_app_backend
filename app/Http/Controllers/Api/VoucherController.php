@@ -39,7 +39,7 @@ class VoucherController extends Controller
         $row = DB::table('vouchers')->where('organization_id', $org)->find($voucher);
         abort_unless($row, 404);
         $this->manager($request, $org, $row->outlet_id);
-        abort_if($row->status !== 'open', 409, 'Posted vouchers are immutable.');
+        abort_if($row->status !== 'open', 409, 'Submitted vouchers are immutable.');
         $data = $request->validate([
             'cashSalesMinor' => ['required', 'integer', 'min:0'], 'cardSalesMinor' => ['required', 'integer', 'min:0'],
             'countedCashMinor' => ['nullable', 'integer', 'min:0'], 'varianceReason' => ['nullable', Rule::in(['rounding', 'tillFloatError', 'uncountedTip', 'other'])],
@@ -54,7 +54,7 @@ class VoucherController extends Controller
         ]);
         DB::transaction(function () use ($request, $voucher, $data) {
             $locked = DB::table('vouchers')->where('id', $voucher)->lockForUpdate()->first();
-            abort_if($locked->status !== 'open', 409, 'Posted vouchers are immutable.');
+            abort_if($locked->status !== 'open', 409, 'Submitted vouchers are immutable.');
             DB::table('vouchers')->where('id', $voucher)->update(['cash_sales_minor' => $data['cashSalesMinor'], 'card_sales_minor' => $data['cardSalesMinor'], 'counted_cash_minor' => $data['countedCashMinor'] ?? null, 'variance_reason' => $data['varianceReason'] ?? null, 'other_variance_reason' => $data['otherVarianceReason'] ?? null, 'updated_at' => now()]);
             $ids = array_column($data['expenses'], 'id');
             DB::table('expenses')->where('voucher_id', $voucher)->when($ids, fn ($q) => $q->whereNotIn('id', $ids))->delete();
@@ -72,7 +72,7 @@ class VoucherController extends Controller
         return response()->json($this->voucher($voucher));
     }
 
-    public function post(Request $request, string $org, string $voucher): JsonResponse
+    public function submitForReview(Request $request, string $org, string $voucher): JsonResponse
     {
         $data = $request->validate(['operationId' => ['required', 'uuid']]);
 
@@ -84,8 +84,8 @@ class VoucherController extends Controller
             $row = DB::table('vouchers')->where('organization_id', $org)->where('id', $voucher)->lockForUpdate()->first();
             abort_unless($row, 404);
             $this->manager($request, $org, $row->outlet_id);
-            abort_if($row->status !== 'open', 409, 'Voucher is already posted.');
-            abort_if($row->counted_cash_minor === null, 422, 'Count the till before posting.');
+            abort_if($row->status !== 'open', 409, 'Voucher is already submitted.');
+            abort_if($row->counted_cash_minor === null, 422, 'Count the till before submitting.');
             $mapped = $this->mapVoucher($row);
             $expenses = DB::table('expenses')->where('voucher_id', $voucher)->get()->map(fn ($e) => $this->mapExpense($e))->all();
             $categories = DB::table('expense_categories')->where('organization_id', $org)->get()->keyBy('id')->map(fn ($c) => (array) $c)->all();
@@ -94,8 +94,7 @@ class VoucherController extends Controller
             abort_if($totals['varianceMinor'] !== 0 && $row->variance_reason === 'other' && ! trim((string) $row->other_variance_reason), 422, 'An explanation is required for Other.');
             $journals = $this->accounting->journals($mapped, $expenses, $categories);
             abort_unless(collect($journals)->every(fn ($j) => $j['balanced']), 500, 'Generated journal is not balanced.');
-            $status = $totals['varianceMinor'] === 0 ? 'posted' : 'variance';
-            DB::table('vouchers')->where('id', $voucher)->update(['status' => $status, 'cash_expenses_minor' => $totals['cashExpensesMinor'], 'bank_expenses_minor' => $totals['bankExpensesMinor'], 'total_expenses_minor' => $totals['totalExpensesMinor'], 'total_sales_minor' => $totals['totalSalesMinor'], 'expected_cash_minor' => $totals['expectedCashMinor'], 'variance_minor' => $totals['varianceMinor'], 'posted_by' => $request->user()->id, 'posted_at' => now(), 'updated_at' => now()]);
+            DB::table('vouchers')->where('id', $voucher)->update(['status' => 'pending_review', 'cash_expenses_minor' => $totals['cashExpensesMinor'], 'bank_expenses_minor' => $totals['bankExpensesMinor'], 'total_expenses_minor' => $totals['totalExpensesMinor'], 'total_sales_minor' => $totals['totalSalesMinor'], 'expected_cash_minor' => $totals['expectedCashMinor'], 'variance_minor' => $totals['varianceMinor'], 'posted_by' => $request->user()->id, 'posted_at' => now(), 'updated_at' => now()]);
             DB::table('journals')->where('voucher_id', $voucher)->delete();
             foreach ($journals as $journal) {
                 foreach ($journal['lines'] as $i => $line) {
@@ -103,7 +102,7 @@ class VoucherController extends Controller
                 }
             }
             DB::table('opening_floats')->updateOrInsert(['outlet_id' => $row->outlet_id], ['amount_minor' => $row->counted_cash_minor, 'source_voucher_id' => $voucher, 'effective_date_key' => CarbonImmutable::createFromFormat('Ymd', $row->date_key)->addDay()->format('Ymd'), 'updated_at' => now(), 'created_at' => now()]);
-            DB::table('audit_events')->insert(['voucher_id' => $voucher, 'actor_id' => $request->user()->id, 'action' => 'VOUCHER_POSTED', 'payload' => json_encode($totals), 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('audit_events')->insert(['voucher_id' => $voucher, 'actor_id' => $request->user()->id, 'action' => 'VOUCHER_SUBMITTED_FOR_REVIEW', 'payload' => json_encode($totals), 'created_at' => now(), 'updated_at' => now()]);
             $result = $this->voucher($voucher);
             DB::table('voucher_operations')->insert(['id' => $data['operationId'], 'voucher_id' => $voucher, 'actor_id' => $request->user()->id, 'result' => json_encode($result), 'created_at' => now(), 'updated_at' => now()]);
 
@@ -114,7 +113,7 @@ class VoucherController extends Controller
     public function history(Request $request, string $org, string $outlet): JsonResponse
     {
         $this->member($request, $org, $outlet);
-        $ids = DB::table('vouchers')->where('organization_id', $org)->where('outlet_id', $outlet)->whereIn('status', ['posted', 'variance'])->orderByDesc('date_key')->pluck('id');
+        $ids = DB::table('vouchers')->where('organization_id', $org)->where('outlet_id', $outlet)->whereIn('status', ['pending_review', 'posted', 'variance'])->orderByDesc('date_key')->pluck('id');
 
         return response()->json($ids->map(fn ($id) => $this->voucher($id)));
     }
@@ -124,7 +123,7 @@ class VoucherController extends Controller
         $row = DB::table('vouchers')->where('organization_id', $org)->find($voucher);
         abort_unless($row, 404);
         $this->manager($request, $org, $row->outlet_id);
-        abort_if($row->status !== 'open', 409, 'Posted vouchers are immutable.');
+        abort_if($row->status !== 'open', 409, 'Submitted vouchers are immutable.');
         $request->validate(['receipt' => ['required', 'file', 'image', 'max:10240']]);
         $path = $request->file('receipt')->store("receipts/{$org}/{$voucher}", 'public');
 
@@ -142,7 +141,7 @@ class VoucherController extends Controller
         $voucher = DB::table('vouchers')->where('organization_id', $org)->find($voucherId);
         abort_unless($voucher, 404);
         $this->manager($request, $org, $voucher->outlet_id);
-        abort_if($voucher->status !== 'open', 409, 'Posted receipt evidence cannot be deleted.');
+        abort_if($voucher->status !== 'open', 409, 'Submitted receipt evidence cannot be deleted.');
         Storage::disk('public')->delete($path);
 
         return response()->json(['ok' => true]);
