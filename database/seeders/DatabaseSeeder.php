@@ -24,9 +24,9 @@ class DatabaseSeeder extends Seeder
         $bookkeeper = User::updateOrCreate(['email' => env('SEED_BOOKKEEPER_EMAIL', 'bookkeeper@example.test')], ['name' => 'Bookkeeper', 'password' => Hash::make(env('SEED_BOOKKEEPER_PASSWORD', 'ChangeMe123!'))]);
         DB::table('organizations')->updateOrInsert(['id' => 'demo-org'], ['name' => 'Daily Cash Voucher', 'timezone' => 'Asia/Colombo', 'currency_code' => 'LKR', 'updated_at' => now(), 'created_at' => now()]);
         // DB::table('outlets')->updateOrInsert(['id' => 'outlet_001'], ['organization_id' => 'demo-org', 'code' => '001', 'name' => 'Main Outlet', 'manager_name' => $manager->name, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
-        // foreach ([[$admin->id, 'admin'], [$manager->id, 'outletManager'], [$bookkeeper->id, 'bookkeeper']] as [$id, $role]) {
-        //     DB::table('organization_user')->updateOrInsert(['organization_id' => 'demo-org', 'user_id' => $id], ['role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
-        // }
+        foreach ([[$admin->id, 'admin'], [$manager->id, 'outletManager'], [$bookkeeper->id, 'bookkeeper']] as [$id, $role]) {
+            DB::table('organization_user')->updateOrInsert(['organization_id' => 'demo-org', 'user_id' => $id], ['role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
+        }
         // foreach ([$manager->id, $bookkeeper->id] as $id) {
         //     DB::table('outlet_user')->updateOrInsert(['outlet_id' => 'outlet_001', 'user_id' => $id], ['active' => true, 'updated_at' => now(), 'created_at' => now()]);
         // }
