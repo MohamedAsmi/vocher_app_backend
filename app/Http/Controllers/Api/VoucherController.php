@@ -180,7 +180,7 @@ class VoucherController extends Controller
 
     private function mapVoucher(object $v): array
     {
-        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) ? $v->posted_at : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
+        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at ? \Illuminate\Support\Carbon::parse($v->created_at)->toIso8601String() : null, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) && $v->posted_at ? \Illuminate\Support\Carbon::parse($v->posted_at)->toIso8601String() : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
     }
 
     private function mapExpense(object $e): array
