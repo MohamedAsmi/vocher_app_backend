@@ -45,7 +45,7 @@ class DashboardController extends Controller
         $this->authorizeDashboard($request);
         $logs = ApiRequestLog::query()
             ->with('user:id,name,email')
-            ->when($request->filled('status'), fn ($query) => $query->where('success', $request->string('status')->value() === 'success'))
+            ->where('success', false)
             ->when($request->filled('path'), fn ($query) => $query->where('path', 'like', '%'.$request->string('path')->value().'%'))
             ->latest()
             ->paginate(50)
