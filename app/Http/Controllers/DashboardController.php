@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -70,6 +71,17 @@ class DashboardController extends Controller
         $user->tokens()->delete();
 
         return back()->with('status', "Password updated for {$user->email}.");
+    }
+
+    public function verifyPassword(Request $request, User $user): RedirectResponse
+    {
+        $this->authorizeDashboard($request);
+        $password = $request->validate(['password' => ['required', 'string']])['password'];
+        $matches = Hash::check($password, $user->password);
+
+        return back()->with($matches ? 'status' : 'error', $matches
+            ? "The password is correct for {$user->email}."
+            : "The password is incorrect for {$user->email}.");
     }
 
     public function logout(Request $request): RedirectResponse
