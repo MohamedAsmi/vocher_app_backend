@@ -18,6 +18,11 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    public function apiRequestLogs()
+    {
+        return $this->hasMany(ApiRequestLog::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
