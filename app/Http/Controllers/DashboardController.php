@@ -51,9 +51,17 @@ class DashboardController extends Controller
             ->latest()
             ->paginate(50)
             ->withQueryString();
+        $successfulLogs = ApiRequestLog::query()
+            ->with('user:id,name,email')
+            ->where('success', true)
+            ->when($request->filled('path'), fn ($query) => $query->where('path', 'like', '%'.$request->string('path')->value().'%'))
+            ->latest()
+            ->paginate(50, ['*'], 'success_page')
+            ->withQueryString();
 
         return view('dashboard.index', [
             'logs' => $logs,
+            'successfulLogs' => $successfulLogs,
             'users' => User::query()->select('id', 'name', 'email', 'created_at')->orderBy('name')->get(),
             'stats' => [
                 'total' => ApiRequestLog::count(),
