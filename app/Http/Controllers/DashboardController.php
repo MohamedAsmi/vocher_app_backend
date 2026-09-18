@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ApiRequestLog;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -62,6 +63,47 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function vouchers(Request $request): View
+    {
+        $this->authorizeDashboard($request);
+        $filters = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'manager' => ['nullable', 'string', 'max:255'],
+        ]);
+        $date = $filters['date'] ?? Carbon::today()->format('Y-m-d');
+
+        $vouchers = DB::table('vouchers')
+            ->join('organizations', 'organizations.id', '=', 'vouchers.organization_id')
+            ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
+            ->leftJoin('users as creators', 'creators.id', '=', 'vouchers.created_by')
+            ->leftJoin('users as posters', 'posters.id', '=', 'vouchers.posted_by')
+            ->whereIn('vouchers.status', ['posted', 'variance'])
+            ->whereDate('vouchers.posted_at', $date)
+            ->when($filters['manager'] ?? null, fn ($query, $manager) => $query->where('outlets.manager_name', $manager))
+            ->orderByDesc('vouchers.posted_at')
+            ->select([
+                'vouchers.*',
+                'organizations.name as organization_name',
+                'outlets.name as outlet_name',
+                'outlets.manager_name',
+                'creators.name as creator_name',
+                'creators.email as creator_email',
+                'posters.name as poster_name',
+                'posters.email as poster_email',
+            ])
+            ->get()
+            ->map(fn ($voucher) => $this->dashboardVoucher($voucher))
+            ->all();
+
+        $managers = DB::table('outlets')
+            ->whereNotNull('manager_name')
+            ->distinct()
+            ->orderBy('manager_name')
+            ->pluck('manager_name');
+
+        return view('dashboard.vouchers', compact('vouchers', 'managers', 'date'));
+    }
+
     public function updatePassword(Request $request, User $user): RedirectResponse
     {
         $this->authorizeDashboard($request);
@@ -101,5 +143,15 @@ class DashboardController extends Controller
     private function isAdmin(User $user): bool
     {
         return DB::table('organization_user')->where('user_id', $user->id)->where('role', 'admin')->where('active', true)->exists();
+    }
+
+    private function dashboardVoucher(object $voucher): array
+    {
+        return [
+            'voucher' => $voucher,
+            'expenses' => DB::table('expenses')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
+            'journals' => DB::table('journals')->where('voucher_id', $voucher->id)->orderBy('type')->orderBy('line_number')->get(),
+            'auditEvents' => DB::table('audit_events')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
+        ];
     }
 }
