@@ -86,7 +86,7 @@ class DashboardController extends Controller
             ->leftJoin('users as creators', 'creators.id', '=', 'vouchers.created_by')
             ->leftJoin('users as posters', 'posters.id', '=', 'vouchers.posted_by')
             ->whereIn('vouchers.status', ['posted', 'variance'])
-            ->whereDate('vouchers.posted_at', $date)
+            ->where('vouchers.date_key', Carbon::parse($date)->format('Ymd'))
             ->when($filters['manager'] ?? null, fn ($query, $manager) => $query->where('outlets.manager_name', $manager))
             ->orderByDesc('vouchers.posted_at')
             ->select([
