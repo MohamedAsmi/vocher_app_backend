@@ -155,8 +155,23 @@ class DashboardController extends Controller
 
     private function dashboardVoucher(object $voucher): array
     {
+        $approval = DB::table('audit_events')
+            ->leftJoin('users', 'users.id', '=', 'audit_events.actor_id')
+            ->where('audit_events.voucher_id', $voucher->id)
+            ->where('audit_events.action', 'VOUCHER_APPROVED_AND_POSTED')
+            ->latest('audit_events.created_at')
+            ->select([
+                'audit_events.action',
+                'audit_events.payload',
+                'audit_events.created_at',
+                'users.name as reviewer_name',
+                'users.email as reviewer_email',
+            ])
+            ->first();
+
         return [
             'voucher' => $voucher,
+            'approval' => $approval,
             'expenses' => DB::table('expenses')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
             'journals' => DB::table('journals')->where('voucher_id', $voucher->id)->orderBy('type')->orderBy('line_number')->get(),
             'auditEvents' => DB::table('audit_events')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
