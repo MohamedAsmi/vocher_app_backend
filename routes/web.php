@@ -10,6 +10,7 @@ Route::get('/dashboard/login', [App\Http\Controllers\DashboardController::class,
 Route::post('/dashboard/login', [App\Http\Controllers\DashboardController::class, 'login'])->name('dashboard.login.store');
 Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 Route::get('/dashboard/vouchers', [App\Http\Controllers\DashboardController::class, 'vouchers'])->name('dashboard.vouchers');
+Route::get('/dashboard/vouchers/{voucher}', [App\Http\Controllers\DashboardController::class, 'voucher'])->name('dashboard.vouchers.show');
 Route::post('/dashboard/users/{user}/password', [App\Http\Controllers\DashboardController::class, 'updatePassword'])->name('dashboard.users.password');
 Route::post('/dashboard/users/{user}/verify-password', [App\Http\Controllers\DashboardController::class, 'verifyPassword'])->name('dashboard.users.verify-password');
 Route::post('/dashboard/logout', [App\Http\Controllers\DashboardController::class, 'logout'])->name('dashboard.logout');

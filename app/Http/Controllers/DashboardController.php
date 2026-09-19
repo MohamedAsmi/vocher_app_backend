@@ -112,6 +112,31 @@ class DashboardController extends Controller
         return view('dashboard.vouchers', compact('vouchers', 'managers', 'date'));
     }
 
+    public function voucher(Request $request, string $voucher): View
+    {
+        $this->authorizeDashboard($request);
+        $row = DB::table('vouchers')
+            ->join('organizations', 'organizations.id', '=', 'vouchers.organization_id')
+            ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
+            ->leftJoin('users as creators', 'creators.id', '=', 'vouchers.created_by')
+            ->leftJoin('users as posters', 'posters.id', '=', 'vouchers.posted_by')
+            ->where('vouchers.id', $voucher)
+            ->select([
+                'vouchers.*',
+                'organizations.name as organization_name',
+                'outlets.name as outlet_name',
+                'outlets.manager_name',
+                'creators.name as creator_name',
+                'creators.email as creator_email',
+                'posters.name as poster_name',
+                'posters.email as poster_email',
+            ])
+            ->first();
+        abort_unless($row, 404);
+
+        return view('dashboard.voucher', ['item' => $this->dashboardVoucher($row)]);
+    }
+
     public function updatePassword(Request $request, User $user): RedirectResponse
     {
         $this->authorizeDashboard($request);
