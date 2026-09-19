@@ -37,7 +37,7 @@
             <td class="pill {{ $voucher->status === 'variance' ? 'variance' : '' }}">{{ strtoupper($voucher->status) }}@if ($voucher->status === 'open')<br><small>Not submitted</small>@endif</td>
             <td>@if ($submission)<strong>{{ $submission->manager_name }}</strong><br><small>{{ $submission->manager_email }}</small><br><small>Submitted: {{ \Carbon\Carbon::parse($submission->created_at)->format('d-m-Y H:i') }}</small>@else{{ $voucher->creator_name }}<br><small>{{ $voucher->creator_email }}</small><br><small>Draft created</small>@endif</td>
             <td>@if ($approval)<strong>{{ $approval->reviewer_name }}</strong><br><small>{{ $approval->reviewer_email }}</small><br><small>Approved: {{ \Carbon\Carbon::parse($approval->created_at)->format('d-m-Y H:i') }}</small>@elseif ($voucher->status === 'pending_review')<span>Pending review</span><br><small>Not approved yet</small>@else<span>-</span>@endif</td>
-            <td>Sales: {{ number_format((int) $voucher->total_sales_minor) }}<br>Expenses: {{ number_format((int) $voucher->total_expenses_minor) }}<br>Variance: {{ number_format((int) $voucher->variance_minor) }}</td>
+            <td>Sales: {{ number_format($item['displaySalesMinor']) }}<br>Expenses: {{ number_format($item['displayExpensesMinor']) }}<br>Variance: {{ $item['displayVarianceMinor'] === null ? '-' : number_format($item['displayVarianceMinor']) }}</td>
             <td><a class="button" href="{{ route('dashboard.vouchers.show', $voucher->id) }}">View details</a></td>
         </tr>
     @empty

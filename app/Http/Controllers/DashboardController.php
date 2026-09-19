@@ -218,11 +218,22 @@ class DashboardController extends Controller
             ];
         }
 
+        $expenses = DB::table('expenses')->where('voucher_id', $voucher->id)->orderBy('created_at')->get();
+        $sales = $voucher->total_sales_minor === null
+            ? (int) $voucher->cash_sales_minor + (int) $voucher->card_sales_minor
+            : (int) $voucher->total_sales_minor;
+        $expenseTotal = $voucher->total_expenses_minor === null
+            ? (int) $expenses->sum('amount_minor')
+            : (int) $voucher->total_expenses_minor;
+
         return [
             'voucher' => $voucher,
             'submission' => $submission,
             'approval' => $approval,
-            'expenses' => DB::table('expenses')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
+            'displaySalesMinor' => $sales,
+            'displayExpensesMinor' => $expenseTotal,
+            'displayVarianceMinor' => $voucher->variance_minor === null ? null : (int) $voucher->variance_minor,
+            'expenses' => $expenses,
             'journals' => DB::table('journals')->where('voucher_id', $voucher->id)->orderBy('type')->orderBy('line_number')->get(),
             'auditEvents' => DB::table('audit_events')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
         ];
