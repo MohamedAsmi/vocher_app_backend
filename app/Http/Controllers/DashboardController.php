@@ -88,7 +88,8 @@ class DashboardController extends Controller
             ->whereIn('vouchers.status', ['open', 'pending_review', 'posted', 'variance'])
             ->when($date, fn ($query, $date) => $query->where('vouchers.date_key', Carbon::parse($date)->format('Ymd')))
             ->when($filters['manager'] ?? null, fn ($query, $manager) => $query->where('outlets.manager_name', $manager))
-            ->orderByDesc('vouchers.posted_at')
+            ->orderByDesc('vouchers.date_key')
+            ->orderByDesc('vouchers.created_at')
             ->select([
                 'vouchers.*',
                 'organizations.name as organization_name',

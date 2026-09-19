@@ -27,7 +27,7 @@
         <button type="submit">Filter</button><a class="button" href="{{ route('dashboard.vouchers') }}">All submissions</a>
     </form>
     <div class="notice">{{ count($vouchers) }} voucher(s) found{{ $date ? ' for '.\Carbon\Carbon::parse($date)->format('d-m-Y') : '' }}.</div>
-    <div class="table-wrap"><table><thead><tr><th>Business date</th><th>Organization / outlet</th><th>Outlet manager</th><th>Status</th><th>Submitted by manager</th><th>Bookkeeper review</th><th>Totals</th><th>Details</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Business date</th><th>Organization / outlet</th><th>Outlet manager</th><th>Status</th><th>Submitted by manager</th><th>Bookkeeper review</th><th>Sales</th><th>Cash reconciliation</th><th>Expenses</th><th>Details</th></tr></thead><tbody>
     @forelse ($vouchers as $item)
         @php($voucher = $item['voucher']) @php($submission = $item['submission']) @php($approval = $item['approval'])
         <tr>
@@ -37,11 +37,13 @@
             <td class="pill {{ $voucher->status === 'variance' ? 'variance' : '' }}">{{ strtoupper($voucher->status) }}@if ($voucher->status === 'open')<br><small>Not submitted</small>@endif</td>
             <td>@if ($submission)<strong>{{ $submission->manager_name }}</strong><br><small>{{ $submission->manager_email }}</small><br><small>Submitted: {{ \Carbon\Carbon::parse($submission->created_at)->format('d-m-Y H:i') }}</small>@else{{ $voucher->creator_name }}<br><small>{{ $voucher->creator_email }}</small><br><small>Draft created</small>@endif</td>
             <td>@if ($approval)<strong>{{ $approval->reviewer_name }}</strong><br><small>{{ $approval->reviewer_email }}</small><br><small>Approved: {{ \Carbon\Carbon::parse($approval->created_at)->format('d-m-Y H:i') }}</small>@elseif ($voucher->status === 'pending_review')<span>Pending review</span><br><small>Not approved yet</small>@else<span>-</span>@endif</td>
-            <td>Cash: {{ number_format((int) $voucher->cash_sales_minor) }}<br>Card: {{ number_format((int) $voucher->card_sales_minor) }}<br>Total: {{ number_format($item['displaySalesMinor']) }}<br>Expenses: {{ number_format($item['displayExpensesMinor']) }}<br>Variance: {{ $item['displayVarianceMinor'] === null ? '-' : number_format($item['displayVarianceMinor']) }}</td>
+            <td>Cash: {{ number_format((int) $voucher->cash_sales_minor) }}<br>Card: {{ number_format((int) $voucher->card_sales_minor) }}<br>Total: {{ number_format($item['displaySalesMinor']) }}</td>
+            <td>Expected: {{ number_format($item['displayExpectedCashMinor']) }}<br>Counted: {{ $item['displayCountedCashMinor'] === null ? 'Not counted' : number_format($item['displayCountedCashMinor']) }}<br>Difference: {{ $item['displayCashDifferenceMinor'] === null ? '-' : number_format($item['displayCashDifferenceMinor']) }}<br><strong>{{ $item['displayCashDifferenceMinor'] === null ? 'NOT COUNTED' : ($item['displayCashDifferenceMinor'] === 0 ? 'MATCHED' : 'NOT MATCHED') }}</strong></td>
+            <td>Cash: {{ number_format($item['displayCashExpensesMinor']) }}<br>Bank: {{ number_format($item['displayBankExpensesMinor']) }}<br>Total: {{ number_format($item['displayExpensesMinor']) }}<br>Variance: {{ $item['displayVarianceMinor'] === null ? 'Pending' : number_format($item['displayVarianceMinor']) }}</td>
             <td><a class="button" href="{{ route('dashboard.vouchers.show', $voucher->id) }}">View details</a></td>
         </tr>
     @empty
-        <tr><td colspan="8">No vouchers match this filter.</td></tr>
+        <tr><td colspan="10">No vouchers match this filter.</td></tr>
     @endforelse
     </tbody></table></div>
 </main>
