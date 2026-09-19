@@ -183,6 +183,16 @@ class DashboardController extends Controller
             ])
             ->first();
 
+        if (! $approval && in_array($voucher->status, ['posted', 'variance'], true) && $voucher->posted_by) {
+            $approval = (object) [
+                'action' => 'VOUCHER_APPROVED_AND_POSTED',
+                'payload' => null,
+                'created_at' => $voucher->posted_at,
+                'reviewer_name' => $voucher->poster_name,
+                'reviewer_email' => $voucher->poster_email,
+            ];
+        }
+
         return [
             'voucher' => $voucher,
             'submission' => $submission,
