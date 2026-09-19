@@ -78,7 +78,7 @@ class DashboardController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
             'manager' => ['nullable', 'string', 'max:255'],
         ]);
-        $date = $filters['date'] ?? Carbon::today()->format('Y-m-d');
+        $date = $filters['date'] ?? null;
 
         $vouchers = DB::table('vouchers')
             ->join('organizations', 'organizations.id', '=', 'vouchers.organization_id')
@@ -86,7 +86,7 @@ class DashboardController extends Controller
             ->leftJoin('users as creators', 'creators.id', '=', 'vouchers.created_by')
             ->leftJoin('users as posters', 'posters.id', '=', 'vouchers.posted_by')
             ->whereIn('vouchers.status', ['pending_review', 'posted', 'variance'])
-            ->where('vouchers.date_key', Carbon::parse($date)->format('Ymd'))
+            ->when($date, fn ($query, $date) => $query->where('vouchers.date_key', Carbon::parse($date)->format('Ymd')))
             ->when($filters['manager'] ?? null, fn ($query, $manager) => $query->where('outlets.manager_name', $manager))
             ->orderByDesc('vouchers.posted_at')
             ->select([
@@ -155,6 +155,20 @@ class DashboardController extends Controller
 
     private function dashboardVoucher(object $voucher): array
     {
+        $submission = DB::table('audit_events')
+            ->leftJoin('users', 'users.id', '=', 'audit_events.actor_id')
+            ->where('audit_events.voucher_id', $voucher->id)
+            ->where('audit_events.action', 'VOUCHER_SUBMITTED_FOR_REVIEW')
+            ->latest('audit_events.created_at')
+            ->select([
+                'audit_events.action',
+                'audit_events.payload',
+                'audit_events.created_at',
+                'users.name as manager_name',
+                'users.email as manager_email',
+            ])
+            ->first();
+
         $approval = DB::table('audit_events')
             ->leftJoin('users', 'users.id', '=', 'audit_events.actor_id')
             ->where('audit_events.voucher_id', $voucher->id)
@@ -171,6 +185,7 @@ class DashboardController extends Controller
 
         return [
             'voucher' => $voucher,
+            'submission' => $submission,
             'approval' => $approval,
             'expenses' => DB::table('expenses')->where('voucher_id', $voucher->id)->orderBy('created_at')->get(),
             'journals' => DB::table('journals')->where('voucher_id', $voucher->id)->orderBy('type')->orderBy('line_number')->get(),
