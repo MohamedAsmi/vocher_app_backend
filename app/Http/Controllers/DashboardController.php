@@ -222,16 +222,31 @@ class DashboardController extends Controller
         $sales = $voucher->total_sales_minor === null
             ? (int) $voucher->cash_sales_minor + (int) $voucher->card_sales_minor
             : (int) $voucher->total_sales_minor;
+            $cashExpenseTotal = $voucher->cash_expenses_minor === null
+                ? (int) $expenses->where('payment_method', 'cash')->sum('amount_minor')
+                : (int) $voucher->cash_expenses_minor;
+            $bankExpenseTotal = $voucher->bank_expenses_minor === null
+                ? (int) $expenses->where('payment_method', 'bankTransfer')->sum('amount_minor')
+                : (int) $voucher->bank_expenses_minor;
         $expenseTotal = $voucher->total_expenses_minor === null
             ? (int) $expenses->sum('amount_minor')
             : (int) $voucher->total_expenses_minor;
+            $expectedCash = $voucher->expected_cash_minor === null
+                ? (int) $voucher->opening_float_minor + (int) $voucher->cash_sales_minor - $cashExpenseTotal
+                : (int) $voucher->expected_cash_minor;
+            $countedCash = $voucher->counted_cash_minor === null ? null : (int) $voucher->counted_cash_minor;
 
         return [
             'voucher' => $voucher,
             'submission' => $submission,
             'approval' => $approval,
             'displaySalesMinor' => $sales,
+                'displayCashExpensesMinor' => $cashExpenseTotal,
+                'displayBankExpensesMinor' => $bankExpenseTotal,
             'displayExpensesMinor' => $expenseTotal,
+                'displayExpectedCashMinor' => $expectedCash,
+                'displayCountedCashMinor' => $countedCash,
+                'displayCashDifferenceMinor' => $countedCash === null ? null : $countedCash - $expectedCash,
             'displayVarianceMinor' => $voucher->variance_minor === null ? null : (int) $voucher->variance_minor,
             'expenses' => $expenses,
             'journals' => DB::table('journals')->where('voucher_id', $voucher->id)->orderBy('type')->orderBy('line_number')->get(),
