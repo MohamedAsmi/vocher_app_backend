@@ -1,16 +1,61 @@
-<section class="panel"><h2>Sales and cash reconciliation</h2><div class="grid"><div><div class="label">Cash sales</div><div class="value">{{ number_format((int) $voucher->cash_sales_minor) }}</div></div><div><div class="label">Card sales</div><div class="value">{{ number_format((int) $voucher->card_sales_minor) }}</div></div><div><div class="label">Total sales</div><div class="value">{{ number_format($item['displaySalesMinor']) }}</div></div><div><div class="label">Opening float</div><div class="value">{{ number_format((int) $voucher->opening_float_minor) }}</div></div><div><div class="label">Cash expenses</div><div class="value">{{ number_format($item['displayCashExpensesMinor']) }}</div></div><div><div class="label">Bank/card expenses</div><div class="value">{{ number_format($item['displayBankExpensesMinor']) }}</div></div><div><div class="label">Total expenses</div><div class="value">{{ number_format($item['displayExpensesMinor']) }}</div></div><div><div class="label">Expected cash</div><div class="value">{{ number_format($item['displayExpectedCashMinor']) }}</div></div><div><div class="label">Counted cash</div><div class="value">{{ $item['displayCountedCashMinor'] === null ? 'Not counted' : number_format($item['displayCountedCashMinor']) }}</div></div><div><div class="label">Difference</div><div class="value">{{ $item['displayCashDifferenceMinor'] === null ? '-' : number_format($item['displayCashDifferenceMinor']) }}</div></div><div><div class="label">Final variance</div><div class="value">{{ $item['displayVarianceMinor'] === null ? 'Pending submission' : number_format($item['displayVarianceMinor']) }}</div></div><div><div class="label">Reconciliation result</div><div class="value">@if ($item['displayCashDifferenceMinor'] === null)<strong>NOT COUNTED</strong>@elseif ($item['displayCashDifferenceMinor'] === 0)<strong>MATCHED</strong>@else<strong class="variance">NOT MATCHED</strong>@endif</div></div></div></section>
+@php
+    $voucher = $item['voucher'];
+    $submission = $item['submission'];
+    $approval = $item['approval'];
+@endphp
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Voucher {{ $item['voucher']->id }}</title><style>
-:root{font-family:system-ui,sans-serif;color:#17383a;background:#f4f0e8}body{margin:0}header{background:#17383a;color:#f4f0e8;padding:1.3rem 4vw;display:flex;justify-content:space-between;align-items:center}main{max-width:1100px;margin:0 auto;padding:2rem 4vw}h1{margin:1rem 0 .4rem}.muted,.label{color:#617071}.button,button{display:inline-block;padding:.65rem .9rem;background:#e5b567;border:0;color:#17383a;font-weight:700;text-decoration:none;cursor:pointer}.link-button{background:transparent;color:#f4f0e8;padding:0}.panel{background:#fff;border:1px solid #d7ddd6;padding:1rem;margin:1rem 0}.panel h2{font-size:1.1rem;margin:0 0 .8rem}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.label{font-size:.8rem}.value{font-size:1rem;margin-top:.15rem}.status{font-weight:700}.variance{color:#b33d32}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.65rem;border-bottom:1px solid #e5e8e3}th{background:#edf1ec;font-size:.8rem;text-transform:uppercase}.empty{color:#617071;font-style:italic}.audit{border-left:3px solid #e5b567;padding:.45rem .7rem;margin:.5rem 0}@media(max-width:700px){header{align-items:flex-start;flex-direction:column;gap:.8rem}main{padding:1.25rem 3vw}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style></head>
-@php($voucher = $item['voucher']) @php($submission = $item['submission']) @php($approval = $item['approval'])
-<body><header><div><strong>Operations dashboard</strong><div style="color:#b8cfca">Voucher detail</div></div><form method="post" action="{{ route('dashboard.logout') }}">@csrf<button class="link-button" type="submit">Sign out</button></form></header>
-<main><nav><a href="{{ route('dashboard') }}">API health</a> | <a href="{{ route('dashboard.vouchers') }}">Voucher review</a></nav><h1>Voucher {{ $voucher->id }}</h1><p class="muted">Complete manager submission and bookkeeper review record.</p><a class="button" href="{{ route('dashboard.vouchers') }}">Back to voucher review</a>
-<section class="panel"><h2>Voucher summary</h2><div class="grid"><div><div class="label">Business date</div><div class="value">{{ \Carbon\Carbon::createFromFormat('Ymd', $voucher->date_key)->format('d-m-Y') }}</div></div><div><div class="label">Status</div><div class="value status {{ $voucher->status === 'variance' ? 'variance' : '' }}">{{ strtoupper($voucher->status) }}</div></div><div><div class="label">Organization</div><div class="value">{{ $voucher->organization_name }}</div></div><div><div class="label">Outlet</div><div class="value">{{ $voucher->outlet_name }}</div></div><div><div class="label">Outlet manager</div><div class="value">{{ $voucher->manager_name }}</div></div><div><div class="label">Voucher ID</div><div class="value">{{ $voucher->id }}</div></div></div></section>
-<section class="panel"><h2>Sales and cash reconciliation</h2><div class="grid"><div><div class="label">Cash sales</div><div class="value">{{ number_format((int) $voucher->cash_sales_minor) }}</div></div><div><div class="label">Card sales</div><div class="value">{{ number_format((int) $voucher->card_sales_minor) }}</div></div><div><div class="label">Total sales</div><div class="value">{{ number_format($item['displaySalesMinor']) }}</div></div><div><div class="label">Opening float</div><div class="value">{{ number_format((int) $voucher->opening_float_minor) }}</div></div><div><div class="label">Cash expenses</div><div class="value">{{ $voucher->cash_expenses_minor === null ? '-' : number_format((int) $voucher->cash_expenses_minor) }}</div></div><div><div class="label">Expected cash</div><div class="value">{{ $voucher->expected_cash_minor === null ? '-' : number_format((int) $voucher->expected_cash_minor) }}</div></div><div><div class="label">Counted cash</div><div class="value">{{ $voucher->counted_cash_minor === null ? '-' : number_format((int) $voucher->counted_cash_minor) }}</div></div><div><div class="label">Variance</div><div class="value">{{ $item['displayVarianceMinor'] === null ? '-' : number_format($item['displayVarianceMinor']) }}</div></div><div><div class="label">Cash expected vs counted</div><div class="value">@if ($voucher->expected_cash_minor === null || $voucher->counted_cash_minor === null) Not checked @elseif ((int) $voucher->expected_cash_minor === (int) $voucher->counted_cash_minor)<strong>Matched</strong>@else<strong class="variance">Not matched</strong>@endif</div></div></div></section>
-<section class="panel"><h2>Manager submission</h2>@if ($submission)<strong>{{ $submission->manager_name }}</strong><br>{{ $submission->manager_email }}<br><span class="muted">Submitted {{ $submission->created_at }}</span>@else<span class="empty">Not submitted. Draft created by {{ $voucher->creator_name }} ({{ $voucher->creator_email }}).</span>@endif</section>
-<section class="panel"><h2>Bookkeeper review</h2>@if ($approval)<strong>{{ $approval->reviewer_name }}</strong><br>{{ $approval->reviewer_email }}<br><span class="muted">Approved {{ $approval->created_at }}</span>@else<span class="empty">Not reviewed yet.</span>@endif</section>
-<section class="panel"><h2>Expenses</h2>@if (count($item['expenses']))<table><thead><tr><th>Description</th><th>Payment</th><th>Amount</th></tr></thead><tbody>@foreach ($item['expenses'] as $expense)<tr><td>{{ $expense->description }}</td><td>{{ $expense->payment_method }}</td><td>{{ number_format((int) $expense->amount_minor) }}</td></tr>@endforeach</tbody></table>@else<span class="empty">No expenses recorded.</span>@endif</section>
-<section class="panel"><h2>Journals</h2>@if (count($item['journals']))<table><thead><tr><th>Type</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>@foreach ($item['journals'] as $journal)<tr><td>{{ $journal->type }}</td><td>{{ $journal->account_name }}</td><td>{{ number_format((int) $journal->debit_minor) }}</td><td>{{ number_format((int) $journal->credit_minor) }}</td></tr>@endforeach</tbody></table>@else<span class="empty">No journals generated yet.</span>@endif</section>
-</main></body></html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voucher {{ $voucher->id }}</title>
+    <style>
+        :root{font-family:system-ui,sans-serif;color:#17383a;background:#f4f0e8}
+        body{margin:0}header{background:#17383a;color:#f4f0e8;padding:1.3rem 4vw;display:flex;justify-content:space-between;align-items:center}
+        main{max-width:1100px;margin:0 auto;padding:2rem 4vw}h1{margin:1rem 0 .4rem}.muted,.label{color:#617071}
+        .button,button{display:inline-block;padding:.65rem .9rem;background:#e5b567;border:0;color:#17383a;font-weight:700;text-decoration:none;cursor:pointer}.link-button{background:transparent;color:#f4f0e8;padding:0}
+        .panel{background:#fff;border:1px solid #d7ddd6;padding:1rem;margin:1rem 0}.panel h2{font-size:1.1rem;margin:0 0 .8rem}
+        .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.label{font-size:.8rem}.value{font-size:1rem;margin-top:.15rem}.status{font-weight:700}.variance{color:#b33d32}
+        table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.65rem;border-bottom:1px solid #e5e8e3}th{background:#edf1ec;font-size:.8rem;text-transform:uppercase}.empty{color:#617071;font-style:italic}
+        @media(max-width:700px){header{align-items:flex-start;flex-direction:column;gap:.8rem}main{padding:1.25rem 3vw}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    </style>
+</head>
+<body>
+<header><div><strong>Operations dashboard</strong><div style="color:#b8cfca">Voucher detail</div></div><form method="post" action="{{ route('dashboard.logout') }}">@csrf<button class="link-button" type="submit">Sign out</button></form></header>
+<main>
+    <nav><a href="{{ route('dashboard') }}">API health</a> | <a href="{{ route('dashboard.vouchers') }}">Voucher review</a></nav>
+    <h1>Voucher {{ $voucher->id }}</h1>
+    <p class="muted">Complete manager submission and bookkeeper review record.</p>
+    <a class="button" href="{{ route('dashboard.vouchers') }}">Back to voucher review</a>
+
+    <section class="panel"><h2>Voucher summary</h2><div class="grid">
+        <div><div class="label">Business date</div><div class="value">{{ \Carbon\Carbon::createFromFormat('Ymd', $voucher->date_key)->format('d-m-Y') }}</div></div>
+        <div><div class="label">Status</div><div class="value status {{ $voucher->status === 'variance' ? 'variance' : '' }}">{{ strtoupper($voucher->status) }}</div></div>
+        <div><div class="label">Organization</div><div class="value">{{ $voucher->organization_name }}</div></div>
+        <div><div class="label">Outlet</div><div class="value">{{ $voucher->outlet_name }}</div></div>
+        <div><div class="label">Outlet manager</div><div class="value">{{ $voucher->manager_name }}</div></div>
+        <div><div class="label">Voucher ID</div><div class="value">{{ $voucher->id }}</div></div>
+    </div></section>
+
+    <section class="panel"><h2>Sales and cash reconciliation</h2><div class="grid">
+        <div><div class="label">Cash sales</div><div class="value">{{ number_format((int) $voucher->cash_sales_minor) }}</div></div>
+        <div><div class="label">Card sales</div><div class="value">{{ number_format((int) $voucher->card_sales_minor) }}</div></div>
+        <div><div class="label">Total sales</div><div class="value">{{ number_format($item['displaySalesMinor']) }}</div></div>
+        <div><div class="label">Opening float</div><div class="value">{{ number_format((int) $voucher->opening_float_minor) }}</div></div>
+        <div><div class="label">Cash expenses</div><div class="value">{{ number_format($item['displayCashExpensesMinor']) }}</div></div>
+        <div><div class="label">Bank transfer expenses</div><div class="value">{{ number_format($item['displayBankExpensesMinor']) }}</div></div>
+        <div><div class="label">Total expenses</div><div class="value">{{ number_format($item['displayExpensesMinor']) }}</div></div>
+        <div><div class="label">Expected cash</div><div class="value">{{ number_format($item['displayExpectedCashMinor']) }}</div></div>
+        <div><div class="label">Counted cash</div><div class="value">{{ $item['displayCountedCashMinor'] === null ? 'Not counted' : number_format($item['displayCountedCashMinor']) }}</div></div>
+        <div><div class="label">Difference</div><div class="value">{{ $item['displayCashDifferenceMinor'] === null ? '-' : number_format($item['displayCashDifferenceMinor']) }}</div></div>
+        <div><div class="label">Final variance</div><div class="value">{{ $item['displayVarianceMinor'] === null ? 'Pending submission' : number_format($item['displayVarianceMinor']) }}</div></div>
+        <div><div class="label">Reconciliation result</div><div class="value">@if ($item['displayCashDifferenceMinor'] === null)<strong>NOT COUNTED</strong>@elseif ($item['displayCashDifferenceMinor'] === 0)<strong>MATCHED</strong>@else<strong class="variance">NOT MATCHED</strong>@endif</div></div>
+    </div></section>
+
+    <section class="panel"><h2>Manager submission</h2>@if ($submission)<strong>{{ $submission->manager_name }}</strong><br>{{ $submission->manager_email }}<br><span class="muted">Submitted {{ \Carbon\Carbon::parse($submission->created_at)->format('d-m-Y H:i') }}</span>@else<span class="empty">Not submitted. Draft created by {{ $voucher->creator_name }} ({{ $voucher->creator_email }}).</span>@endif</section>
+    <section class="panel"><h2>Bookkeeper review</h2>@if ($approval)<strong>{{ $approval->reviewer_name }}</strong><br>{{ $approval->reviewer_email }}<br><span class="muted">Approved {{ \Carbon\Carbon::parse($approval->created_at)->format('d-m-Y H:i') }}</span>@else<span class="empty">Not reviewed yet.</span>@endif</section>
+    <section class="panel"><h2>Expenses</h2>@if (count($item['expenses']))<table><thead><tr><th>Description</th><th>Payment</th><th>Amount</th></tr></thead><tbody>@foreach ($item['expenses'] as $expense)<tr><td>{{ $expense->description }}</td><td>{{ $expense->payment_method }}</td><td>{{ number_format((int) $expense->amount_minor) }}</td></tr>@endforeach</tbody></table>@else<span class="empty">No expenses recorded.</span>@endif</section>
+    <section class="panel"><h2>Journals</h2>@if (count($item['journals']))<table><thead><tr><th>Type</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>@foreach ($item['journals'] as $journal)<tr><td>{{ $journal->type }}</td><td>{{ $journal->account_name }}</td><td>{{ number_format((int) $journal->debit_minor) }}</td><td>{{ number_format((int) $journal->credit_minor) }}</td></tr>@endforeach</tbody></table>@else<span class="empty">No journals generated yet.</span>@endif</section>
+</main>
+</body>
+</html>
