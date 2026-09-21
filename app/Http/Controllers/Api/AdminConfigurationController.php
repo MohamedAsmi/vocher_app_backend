@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ class AdminConfigurationController extends Controller
     public function index(Request $request, string $org): JsonResponse
     {
         $this->admin($request, $org);
+
         return response()->json([
             'categories' => DB::table('expense_categories')->where('organization_id', $org)->orderBy('sort_order')->orderBy('name')->get()->map(fn ($row) => $this->category($row)),
             'outlets' => DB::table('outlets')->where('organization_id', $org)->orderBy('name')->get()->map(fn ($row) => $this->outlet($row)),
@@ -28,8 +30,11 @@ class AdminConfigurationController extends Controller
         abort_if($base === '', 422, 'Enter a category name.');
         $id = 'cat_'.$base;
         $suffix = 2;
-        while (DB::table('expense_categories')->where('id', $id)->exists()) $id = 'cat_'.$base.'_'. $suffix++;
+        while (DB::table('expense_categories')->where('id', $id)->exists()) {
+            $id = 'cat_'.$base.'_'.$suffix++;
+        }
         DB::table('expense_categories')->insert(['id' => $id, 'organization_id' => $org] + $data + ['active' => true, 'created_at' => now(), 'updated_at' => now()]);
+
         return response()->json($this->category(DB::table('expense_categories')->find($id)), 201);
     }
 
@@ -39,6 +44,7 @@ class AdminConfigurationController extends Controller
         abort_unless(DB::table('expense_categories')->where(['id' => $category, 'organization_id' => $org])->exists(), 404);
         $data = $this->categoryData($request) + ['active' => $request->boolean('active', true), 'updated_at' => now()];
         DB::table('expense_categories')->where('id', $category)->update($data);
+
         return response()->json($this->category(DB::table('expense_categories')->find($category)));
     }
 
@@ -46,10 +52,15 @@ class AdminConfigurationController extends Controller
     {
         $this->admin($request, $org);
         $data = $this->outletData($request, $org);
+        $openingFloatMinor = $data['openingFloatMinor'];
+        unset($data['openingFloatMinor']);
         $id = 'outlet_'.Str::slug($data['code'], '_');
         abort_if(DB::table('outlets')->where('id', $id)->exists(), 422, 'That outlet code is already used.');
-        DB::table('outlets')->insert(['id' => $id, 'organization_id' => $org] + $data + ['active' => true, 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('opening_floats')->insert(['outlet_id' => $id, 'amount_minor' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        DB::transaction(function () use ($id, $org, $data, $openingFloatMinor) {
+            DB::table('outlets')->insert(['id' => $id, 'organization_id' => $org] + $data + ['active' => true, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('opening_floats')->insert(['outlet_id' => $id, 'amount_minor' => $openingFloatMinor, 'created_at' => now(), 'updated_at' => now()]);
+        });
+
         return response()->json($this->outlet(DB::table('outlets')->find($id)), 201);
     }
 
@@ -57,14 +68,57 @@ class AdminConfigurationController extends Controller
     {
         $this->admin($request, $org);
         abort_unless(DB::table('outlets')->where(['id' => $outlet, 'organization_id' => $org])->exists(), 404);
-        $data = $this->outletData($request, $org, $outlet) + ['active' => $request->boolean('active', true), 'updated_at' => now()];
-        DB::table('outlets')->where('id', $outlet)->update($data);
+        $data = $this->outletData($request, $org, $outlet);
+        $openingFloatMinor = $data['openingFloatMinor'];
+        unset($data['openingFloatMinor']);
+        $data += ['active' => $request->boolean('active', true), 'updated_at' => now()];
+        DB::transaction(function () use ($org, $outlet, $data, $openingFloatMinor) {
+            DB::table('outlets')->where('id', $outlet)->update($data);
+            DB::table('opening_floats')->updateOrInsert(
+                ['outlet_id' => $outlet],
+                ['amount_minor' => $openingFloatMinor, 'source_voucher_id' => null, 'effective_date_key' => null, 'updated_at' => now(), 'created_at' => now()],
+            );
+
+            // A voucher copies its float when it is created. Keep today's
+            // editable voucher in sync; submitted vouchers stay immutable.
+            $timezone = DB::table('organizations')->where('id', $org)->value('timezone') ?: config('app.timezone');
+            DB::table('vouchers')->where([
+                'organization_id' => $org,
+                'outlet_id' => $outlet,
+                'date_key' => CarbonImmutable::now($timezone)->format('Ymd'),
+                'status' => 'open',
+            ])->update(['opening_float_minor' => $openingFloatMinor, 'updated_at' => now()]);
+        });
+
         return response()->json($this->outlet(DB::table('outlets')->find($outlet)));
     }
 
-    private function categoryData(Request $request): array { $data = $request->validate(['name' => ['required','string','max:255'], 'accountCode' => ['required','string','max:100'], 'accountName' => ['required','string','max:255'], 'sortOrder' => ['nullable','integer','min:0']]); return ['name' => $data['name'], 'account_code' => $data['accountCode'], 'account_name' => $data['accountName'], 'sort_order' => (int) ($data['sortOrder'] ?? 0)]; }
-    private function outletData(Request $request, string $org, ?string $current = null): array { $data = $request->validate(['code' => ['required','string','max:50', Rule::unique('outlets', 'code')->where(fn ($q) => $q->where('organization_id', $org))->ignore($current, 'id')], 'name' => ['required','string','max:255'], 'managerName' => ['required','string','max:255'], 'address' => ['nullable','string','max:2000']]); return ['code' => $data['code'], 'name' => $data['name'], 'manager_name' => $data['managerName'], 'address' => $data['address'] ?? null]; }
-    private function category(object $row): array { return ['id' => $row->id, 'name' => $row->name, 'accountCode' => $row->account_code, 'accountName' => $row->account_name, 'sortOrder' => (int) $row->sort_order, 'active' => (bool) $row->active]; }
-    private function outlet(object $row): array { return ['id' => $row->id, 'code' => $row->code, 'name' => $row->name, 'managerName' => $row->manager_name, 'address' => $row->address, 'active' => (bool) $row->active]; }
-    private function admin(Request $request, string $org): void { abort_unless(DB::table('organization_user')->where(['organization_id' => $org, 'user_id' => $request->user()->id, 'role' => 'admin', 'active' => true])->exists(), 403, 'Administrator access is required.'); }
+    private function categoryData(Request $request): array
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:255'], 'accountCode' => ['required', 'string', 'max:100'], 'accountName' => ['required', 'string', 'max:255'], 'sortOrder' => ['nullable', 'integer', 'min:0']]);
+
+        return ['name' => $data['name'], 'account_code' => $data['accountCode'], 'account_name' => $data['accountName'], 'sort_order' => (int) ($data['sortOrder'] ?? 0)];
+    }
+
+    private function outletData(Request $request, string $org, ?string $current = null): array
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:50', Rule::unique('outlets', 'code')->where(fn ($q) => $q->where('organization_id', $org))->ignore($current, 'id')], 'name' => ['required', 'string', 'max:255'], 'managerName' => ['required', 'string', 'max:255'], 'address' => ['nullable', 'string', 'max:2000'], 'openingFloatMinor' => ['required', 'integer', 'min:0']]);
+
+        return ['code' => $data['code'], 'name' => $data['name'], 'manager_name' => $data['managerName'], 'address' => $data['address'] ?? null, 'openingFloatMinor' => (int) $data['openingFloatMinor']];
+    }
+
+    private function category(object $row): array
+    {
+        return ['id' => $row->id, 'name' => $row->name, 'accountCode' => $row->account_code, 'accountName' => $row->account_name, 'sortOrder' => (int) $row->sort_order, 'active' => (bool) $row->active];
+    }
+
+    private function outlet(object $row): array
+    {
+        return ['id' => $row->id, 'code' => $row->code, 'name' => $row->name, 'managerName' => $row->manager_name, 'address' => $row->address, 'openingFloatMinor' => (int) (DB::table('opening_floats')->where('outlet_id', $row->id)->value('amount_minor') ?? 0), 'active' => (bool) $row->active];
+    }
+
+    private function admin(Request $request, string $org): void
+    {
+        abort_unless(DB::table('organization_user')->where(['organization_id' => $org, 'user_id' => $request->user()->id, 'role' => 'admin', 'active' => true])->exists(), 403, 'Administrator access is required.');
+    }
 }

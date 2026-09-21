@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use App\Notifications\NewAccountCreated;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -38,6 +41,7 @@ class VoucherWorkflowTest extends TestCase
         $expenseId = (string) Str::uuid();
         $this->withHeaders($manager)
             ->putJson("/api/organizations/demo-org/vouchers/{$voucher['id']}", [
+                'openingFloatMinor' => 50000,
                 'cashSalesMinor' => 100000,
                 'cardSalesMinor' => 25000,
                 'countedCashMinor' => 140000,
@@ -131,6 +135,7 @@ class VoucherWorkflowTest extends TestCase
 
     public function test_admin_can_manage_users_and_outlet_access(): void
     {
+        Notification::fake();
         $this->seed(DatabaseSeeder::class);
         $token = $this->postJson('/api/login', [
             'email' => 'admin@example.test',
@@ -152,6 +157,11 @@ class VoucherWorkflowTest extends TestCase
                 'role' => 'outletManager',
                 'outletIds' => ['outlet_001'],
             ])->assertCreated()->assertJsonPath('outletIds.0', 'outlet_001')->json();
+
+        Notification::assertSentTo(
+            User::findOrFail($created['id']),
+            NewAccountCreated::class,
+        );
 
         $this->withHeaders($headers)
             ->putJson("/api/organizations/demo-org/admin/users/{$created['id']}", [

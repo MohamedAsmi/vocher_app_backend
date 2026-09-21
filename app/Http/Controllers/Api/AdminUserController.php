@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\NewAccountCreated;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminUserController extends Controller
 {
@@ -55,6 +57,15 @@ class AdminUserController extends Controller
 
             return $user;
         });
+
+        $organizationName = DB::table('organizations')->where('id', $org)->value('name') ?? config('app.name');
+        try {
+            $user->notify(new NewAccountCreated($data['role'], $organizationName));
+        } catch (\Throwable $error) {
+            // Account creation must not be retried (and collide on its unique
+            // email) only because the configured mail service is unavailable.
+            report($error);
+        }
 
         return response()->json($this->findUser($user->id, $org), 201);
     }
@@ -104,7 +115,7 @@ class AdminUserController extends Controller
 
     private function validated(Request $request, string $org, ?int $userId = null, bool $passwordRequired = true): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
             'password' => [$passwordRequired ? 'required' : 'nullable', 'string', 'min:8'],
@@ -116,6 +127,14 @@ class AdminUserController extends Controller
                 Rule::exists('outlets', 'id')->where(fn ($query) => $query->where('organization_id', $org)->where('active', true)),
             ],
         ]);
+
+        if ($data['role'] !== 'admin' && empty($data['outletIds'])) {
+            throw ValidationException::withMessages([
+                'outletIds' => ['Assign at least one outlet to this user.'],
+            ]);
+        }
+
+        return $data;
     }
 
     private function syncOutlets(int $userId, string $org, array $outletIds): void
