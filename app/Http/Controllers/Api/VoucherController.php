@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class VoucherController extends Controller
@@ -37,6 +38,47 @@ class VoucherController extends Controller
                 ])
                 ->values()
         );
+    }
+
+    public function storeCategory(Request $request, string $org): JsonResponse
+    {
+        $role = DB::table('organization_user')->where([
+            'organization_id' => $org,
+            'user_id' => $request->user()->id,
+            'active' => true,
+        ])->value('role');
+        abort_unless(in_array($role, ['admin', 'outletManager'], true), 403);
+        $data = $request->validate([
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('expense_categories', 'name')->where(
+                    fn ($query) => $query->where('organization_id', $org),
+                ),
+            ],
+        ]);
+        $base = Str::slug($data['name'], '_');
+        abort_if($base === '', 422, 'Enter a category name.');
+        $id = 'cat_'.$base;
+        $suffix = 2;
+        while (DB::table('expense_categories')->where('id', $id)->exists()) {
+            $id = 'cat_'.$base.'_'.$suffix++;
+        }
+        $sortOrder = (int) DB::table('expense_categories')
+            ->where('organization_id', $org)
+            ->max('sort_order') + 10;
+        DB::table('expense_categories')->insert([
+            'id' => $id,
+            'organization_id' => $org,
+            'name' => trim($data['name']),
+            'account_code' => 'EXP-CUSTOM',
+            'account_name' => trim($data['name']),
+            'sort_order' => $sortOrder,
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['id' => $id, 'name' => trim($data['name'])], 201);
     }
 
     public function today(Request $request, string $org, string $outlet): JsonResponse

@@ -31,6 +31,18 @@ class VoucherWorkflowTest extends TestCase
             ->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('role', 'outletManager');
+        $createdCategory = $this->withHeaders($manager)
+            ->postJson('/api/organizations/demo-org/expense-categories', [
+                'name' => 'Cleaning supplies',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('name', 'Cleaning supplies')
+            ->json();
+        $this->assertDatabaseHas('expense_categories', [
+            'id' => $createdCategory['id'],
+            'organization_id' => 'demo-org',
+            'active' => true,
+        ]);
 
         $voucher = $this->withHeaders($manager)
             ->postJson('/api/organizations/demo-org/outlets/outlet_001/vouchers/today')
