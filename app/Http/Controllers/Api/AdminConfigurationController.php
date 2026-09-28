@@ -7,11 +7,80 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AdminConfigurationController extends Controller
 {
+    public function submittedVouchers(Request $request, string $org): JsonResponse
+    {
+        $this->admin($request, $org);
+
+        return response()->json(
+            DB::table('vouchers')
+                ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
+                ->where('vouchers.organization_id', $org)
+                ->where('vouchers.status', '!=', 'open')
+                ->orderByDesc('vouchers.date_key')
+                ->orderBy('outlets.name')
+                ->limit(250)
+                ->get([
+                    'vouchers.id', 'vouchers.outlet_id', 'outlets.name as outlet_name',
+                    'vouchers.date_key', 'vouchers.status', 'vouchers.total_sales_minor',
+                    'vouchers.total_expenses_minor', 'vouchers.created_at', 'vouchers.posted_at',
+                ])
+                ->map(fn ($row) => [
+                    'id' => $row->id,
+                    'outletId' => $row->outlet_id,
+                    'outletName' => $row->outlet_name,
+                    'dateKey' => $row->date_key,
+                    'status' => $row->status,
+                    'totalSalesMinor' => (int) ($row->total_sales_minor ?? 0),
+                    'totalExpensesMinor' => (int) ($row->total_expenses_minor ?? 0),
+                    'submittedAt' => $row->posted_at ?? $row->created_at,
+                ]),
+        );
+    }
+
+    public function destroySubmittedVoucher(Request $request, string $org, string $voucher): JsonResponse
+    {
+        $this->admin($request, $org);
+        $receiptPaths = DB::table('expenses')
+            ->where('voucher_id', $voucher)
+            ->whereNotNull('receipt_path')
+            ->pluck('receipt_path')
+            ->filter()
+            ->all();
+
+        DB::transaction(function () use ($org, $voucher) {
+            $row = DB::table('vouchers')
+                ->where('organization_id', $org)
+                ->where('id', $voucher)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($row, 404);
+            abort_if($row->status === 'open', 409, 'Open vouchers cannot be deleted here.');
+
+            DB::table('opening_floats')
+                ->where('outlet_id', $row->outlet_id)
+                ->where('source_voucher_id', $voucher)
+                ->update([
+                    'amount_minor' => $row->opening_float_minor,
+                    'source_voucher_id' => null,
+                    'effective_date_key' => $row->date_key,
+                    'updated_at' => now(),
+                ]);
+            DB::table('vouchers')->where('id', $voucher)->delete();
+        });
+
+        foreach ($receiptPaths as $path) {
+            Storage::disk('public')->delete($path);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     public function index(Request $request, string $org): JsonResponse
     {
         $this->admin($request, $org);

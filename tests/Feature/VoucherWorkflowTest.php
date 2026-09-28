@@ -110,6 +110,35 @@ class VoucherWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('journals', ['voucher_id' => $voucher['id'], 'account_name' => 'Sales Revenue']);
         $this->assertDatabaseHas('opening_floats', ['outlet_id' => 'outlet_001', 'amount_minor' => 140000]);
+        $this->withHeader('Authorization', 'Bearer '.$bookkeeperToken)
+            ->deleteJson('/api/organizations/demo-org/admin/vouchers/'.$voucher['id'])
+            ->assertForbidden();
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $adminToken = $this->postJson('/api/login', [
+            'email' => 'admin@example.test',
+            'password' => 'ChangeMe123!',
+            'deviceName' => 'admin-voucher-delete-test',
+        ])->assertOk()->json('token');
+        $admin = ['Authorization' => 'Bearer '.$adminToken];
+
+        $this->withHeaders($admin)
+            ->getJson('/api/organizations/demo-org/admin/vouchers')
+            ->assertOk()
+            ->assertJsonPath('0.id', $voucher['id']);
+        $this->withHeaders($admin)
+            ->deleteJson('/api/organizations/demo-org/admin/vouchers/'.$voucher['id'])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('vouchers', ['id' => $voucher['id']]);
+        $this->assertDatabaseMissing('expenses', ['voucher_id' => $voucher['id']]);
+        $this->assertDatabaseMissing('journals', ['voucher_id' => $voucher['id']]);
+        $this->assertDatabaseHas('opening_floats', [
+            'outlet_id' => 'outlet_001',
+            'amount_minor' => 50000,
+            'source_voucher_id' => null,
+        ]);
     }
 
     public function test_unauthenticated_requests_are_rejected(): void
