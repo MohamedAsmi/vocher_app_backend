@@ -69,7 +69,7 @@ class VoucherController extends Controller
             'openingFloatMinor' => ['required', 'integer', 'min:0'],
             'cashSalesMinor' => ['required', 'integer', 'min:0'], 'cardSalesMinor' => ['required', 'integer', 'min:0'],
             'countedCashMinor' => ['nullable', 'integer', 'min:0'], 'varianceReason' => ['nullable', Rule::in(['rounding', 'tillFloatError', 'uncountedTip', 'other'])],
-            'otherVarianceReason' => ['nullable', 'string', 'max:1000'], 'expenses' => ['required', 'array'], 'expenses.*.id' => ['required', 'uuid'],
+            'otherVarianceReason' => ['nullable', 'string', 'max:1000'], 'expenses' => ['present', 'array'], 'expenses.*.id' => ['required', 'uuid'],
             'expenses.*.description' => ['required', 'string', 'max:255'], 'expenses.*.categoryId' => ['required', 'string', Rule::exists('expense_categories', 'id')->where(fn ($query) => $query->where('organization_id', $org)->where('active', true))],
             'expenses.*.paymentMethod' => ['required', Rule::in(['cash', 'bankTransfer'])], 'expenses.*.amountMinor' => ['required', 'integer', 'min:1'],
             'expenses.*.receiptId' => ['nullable', 'string', 'max:2048'],

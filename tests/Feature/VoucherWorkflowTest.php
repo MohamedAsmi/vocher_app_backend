@@ -38,6 +38,14 @@ class VoucherWorkflowTest extends TestCase
             ->assertJsonPath('openingFloatMinor', 50000)
             ->json();
 
+        $this->withHeaders($manager)
+            ->putJson('/api/organizations/demo-org/vouchers/'.$voucher['id'], [
+                'openingFloatMinor' => 50000, 'cashSalesMinor' => 0,
+                'cardSalesMinor' => 0, 'countedCashMinor' => null,
+                'varianceReason' => null, 'otherVarianceReason' => null,
+                'expenses' => [],
+            ])->assertOk()->assertJsonPath('expenses', []);
+
         $expenseId = (string) Str::uuid();
         $this->withHeaders($manager)
             ->putJson("/api/organizations/demo-org/vouchers/{$voucher['id']}", [
