@@ -128,6 +128,12 @@ class VoucherWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('0.id', $voucher['id']);
         $this->withHeaders($admin)
+            ->getJson('/api/organizations/demo-org/admin/vouchers/'.$voucher['id'])
+            ->assertOk()
+            ->assertJsonPath('id', $voucher['id'])
+            ->assertJsonPath('expenses.0.id', $expenseId)
+            ->assertJsonPath('cashSalesMinor', 100000);
+        $this->withHeaders($admin)
             ->deleteJson('/api/organizations/demo-org/admin/vouchers/'.$voucher['id'])
             ->assertOk();
 

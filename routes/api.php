@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/organizations/{org}/admin/users/{user}', [AdminUserController::class, 'destroy']);
     Route::get('/organizations/{org}/admin/configuration', [AdminConfigurationController::class, 'index']);
     Route::get('/organizations/{org}/admin/vouchers', [AdminConfigurationController::class, 'submittedVouchers']);
+    Route::get('/organizations/{org}/admin/vouchers/{voucher}', [AdminConfigurationController::class, 'submittedVoucher']);
     Route::delete('/organizations/{org}/admin/vouchers/{voucher}', [AdminConfigurationController::class, 'destroySubmittedVoucher']);
     Route::post('/organizations/{org}/admin/categories', [AdminConfigurationController::class, 'storeCategory']);
     Route::put('/organizations/{org}/admin/categories/{category}', [AdminConfigurationController::class, 'updateCategory']);

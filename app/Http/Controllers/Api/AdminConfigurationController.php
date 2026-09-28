@@ -43,6 +43,53 @@ class AdminConfigurationController extends Controller
         );
     }
 
+    public function submittedVoucher(Request $request, string $org, string $voucher): JsonResponse
+    {
+        $this->admin($request, $org);
+        $row = DB::table('vouchers')
+            ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
+            ->where('vouchers.organization_id', $org)
+            ->where('vouchers.id', $voucher)
+            ->select('vouchers.*', 'outlets.name as outlet_name', 'outlets.address as outlet_address')
+            ->first();
+        abort_unless($row, 404);
+        abort_if($row->status === 'open', 409, 'Only submitted vouchers are available here.');
+        $submittedAt = DB::table('audit_events')
+            ->where('voucher_id', $voucher)
+            ->where('action', 'VOUCHER_SUBMITTED_FOR_REVIEW')
+            ->max('created_at');
+
+        return response()->json([
+            'id' => $row->id,
+            'outletId' => $row->outlet_id,
+            'outletName' => $row->outlet_name,
+            'outletAddress' => $row->outlet_address,
+            'dateKey' => $row->date_key,
+            'status' => $row->status,
+            'createdAt' => $row->created_at ? CarbonImmutable::parse($row->created_at)->toIso8601String() : null,
+            'submittedAt' => $submittedAt ? CarbonImmutable::parse($submittedAt)->toIso8601String() : null,
+            'approvedAt' => in_array($row->status, ['posted', 'variance'], true) && $row->posted_at ? CarbonImmutable::parse($row->posted_at)->toIso8601String() : null,
+            'openingFloatMinor' => (int) $row->opening_float_minor,
+            'cashSalesMinor' => (int) $row->cash_sales_minor,
+            'cardSalesMinor' => (int) $row->card_sales_minor,
+            'countedCashMinor' => $row->counted_cash_minor === null ? null : (int) $row->counted_cash_minor,
+            'varianceReason' => $row->variance_reason,
+            'otherVarianceReason' => $row->other_variance_reason,
+            'expenses' => DB::table('expenses')->where('voucher_id', $voucher)->orderBy('created_at')->get()->map(fn ($expense) => [
+                'id' => $expense->id,
+                'description' => $expense->description,
+                'categoryId' => $expense->category_id,
+                'paymentMethod' => $expense->payment_method,
+                'amountMinor' => (int) $expense->amount_minor,
+                'receiptId' => $expense->receipt_path,
+                'ocrSupplier' => $expense->ocr_supplier,
+                'ocrTotalMinor' => $expense->ocr_total_minor === null ? null : (int) $expense->ocr_total_minor,
+                'ocrCategoryId' => $expense->ocr_category_id,
+                'ocrRawText' => $expense->ocr_raw_text,
+            ]),
+        ]);
+    }
+
     public function destroySubmittedVoucher(Request $request, string $org, string $voucher): JsonResponse
     {
         $this->admin($request, $org);
