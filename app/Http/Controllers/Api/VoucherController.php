@@ -44,7 +44,8 @@ class VoucherController extends Controller
         $this->manager($request, $org, $outlet);
         $organization = DB::table('organizations')->find($org);
         abort_unless($organization, 404, 'Organization not found.');
-        $dateKey = CarbonImmutable::now($organization->timezone)->format('Ymd');
+        $data = $request->validate(['dateKey' => ['nullable', 'date_format:Ymd']]);
+        $dateKey = $data['dateKey'] ?? CarbonImmutable::now($organization->timezone)->format('Ymd');
         $id = "{$outlet}_{$dateKey}";
         DB::transaction(function () use ($request, $org, $outlet, $dateKey, $id) {
             if (DB::table('vouchers')->where('id', $id)->lockForUpdate()->exists()) {
@@ -186,7 +187,12 @@ class VoucherController extends Controller
 
     private function mapVoucher(object $v): array
     {
-        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at ? Carbon::parse($v->created_at)->toIso8601String() : null, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) && $v->posted_at ? Carbon::parse($v->posted_at)->toIso8601String() : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
+        $submittedAt = DB::table('audit_events')
+            ->where('voucher_id', $v->id)
+            ->where('action', 'VOUCHER_SUBMITTED_FOR_REVIEW')
+            ->max('created_at');
+
+        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at ? Carbon::parse($v->created_at)->toIso8601String() : null, 'submittedAt' => $submittedAt ? Carbon::parse($submittedAt)->toIso8601String() : null, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) && $v->posted_at ? Carbon::parse($v->posted_at)->toIso8601String() : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
     }
 
     private function mapExpense(object $e): array

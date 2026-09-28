@@ -44,21 +44,48 @@ class BookkeeperController extends Controller
     public function reviews(Request $request, string $org): JsonResponse
     {
         $dateKey = $request->validate(['dateKey' => ['required', 'date_format:Ymd']])['dateKey'];
+        $monthKey = substr($dateKey, 0, 6);
         $role = DB::table('organization_user')->where(['organization_id' => $org, 'user_id' => $request->user()->id, 'active' => true])->value('role');
         abort_unless(in_array($role, ['admin', 'bookkeeper'], true), 403, 'Bookkeeper access is required.');
         $outlets = DB::table('outlets')->when($role !== 'admin', fn ($q) => $q->join('outlet_user', 'outlet_user.outlet_id', '=', 'outlets.id')->where('outlet_user.user_id', $request->user()->id)->where('outlet_user.active', true))->where('outlets.organization_id', $org)->select('outlets.*')->get();
+        $outletsById = $outlets->keyBy('id');
+        $vouchers = DB::table('vouchers')
+            ->where('organization_id', $org)
+            ->whereIn('outlet_id', $outlets->pluck('id'))
+            ->where('date_key', 'like', $monthKey.'%')
+            ->whereIn('status', ['pending_review', 'posted', 'variance'])
+            ->orderByDesc('date_key')
+            ->get();
 
-        return response()->json($outlets->map(function ($outlet) use ($dateKey) {
-            $voucher = DB::table('vouchers')->where(['outlet_id' => $outlet->id, 'date_key' => $dateKey])->whereIn('status', ['pending_review', 'posted', 'variance'])->first();
+        $summaries = $vouchers->map(function ($voucher) use ($outletsById) {
+            $outlet = $outletsById->get($voucher->outlet_id);
 
             return [
                 'outletId' => $outlet->id,
                 'outletName' => $outlet->name,
                 'managerName' => $outlet->manager_name,
-                'voucher' => $voucher ? $this->voucher($voucher->id) : null,
-                'followUpOpen' => $voucher ? DB::table('follow_ups')->where(['voucher_id' => $voucher->id, 'status' => 'open'])->exists() : false,
+                'voucher' => $this->voucher($voucher->id),
+                'followUpOpen' => DB::table('follow_ups')->where(['voucher_id' => $voucher->id, 'status' => 'open'])->exists(),
             ];
-        }));
+        });
+
+        $outletsWithSubmissions = $vouchers->pluck('outlet_id')->unique();
+        $emptyOutlets = $outlets
+            ->whereNotIn('id', $outletsWithSubmissions)
+            ->map(fn ($outlet) => [
+                'outletId' => $outlet->id,
+                'outletName' => $outlet->name,
+                'managerName' => $outlet->manager_name,
+                'voucher' => null,
+                'followUpOpen' => false,
+            ]);
+
+        return response()->json(
+            $summaries
+                ->concat($emptyOutlets)
+                ->sortByDesc(fn ($summary) => $summary['voucher']['submittedAt'] ?? $summary['voucher']['dateKey'] ?? '')
+                ->values()
+        );
     }
 
     public function followUp(Request $request, string $org, string $voucher): JsonResponse
@@ -98,6 +125,11 @@ class BookkeeperController extends Controller
             ->select('vouchers.*', 'outlets.name as outlet_name')
             ->first();
 
+        $submittedAt = DB::table('audit_events')
+            ->where('voucher_id', $id)
+            ->where('action', 'VOUCHER_SUBMITTED_FOR_REVIEW')
+            ->max('created_at');
+
         return [
             'id' => $row->id,
             'outletId' => $row->outlet_id,
@@ -105,6 +137,7 @@ class BookkeeperController extends Controller
             'dateKey' => $row->date_key,
             'status' => $row->status,
             'createdAt' => $row->created_at ? \Illuminate\Support\Carbon::parse($row->created_at)->toIso8601String() : null,
+            'submittedAt' => $submittedAt ? \Illuminate\Support\Carbon::parse($submittedAt)->toIso8601String() : null,
             'approvedAt' => in_array($row->status, ['posted', 'variance'], true) && $row->posted_at ? \Illuminate\Support\Carbon::parse($row->posted_at)->toIso8601String() : null,
             'openingFloatMinor' => (int) $row->opening_float_minor,
             'cashSalesMinor' => (int) $row->cash_sales_minor,
