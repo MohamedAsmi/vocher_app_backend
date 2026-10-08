@@ -23,7 +23,7 @@ Response: {{ json_encode($log->response_body, JSON_PRETTY_PRINT | JSON_UNESCAPED
 </tbody></table></div>{{ $successfulLogs->links() }}
 @endif
 <h2>User credentials</h2><p class="muted">Passwords are never readable from the database. Enter a password to verify it, or set a new one.</p><div class="table-wrap"><table><thead><tr><th>Name</th><th>Username / email</th><th>Password check</th><th>Set new password</th></tr></thead><tbody>@forelse ($users as $user)<tr><td>{{ $user->name }}</td><td>{{ $user->email }}</td><td><form class="password-form" method="post" action="{{ route('dashboard.users.verify-password', $user) }}">@csrf<input name="password" type="password" placeholder="Existing password" required><button type="submit">Check password</button></form></td><td><form class="password-form" method="post" action="{{ route('dashboard.users.password', $user) }}">@csrf<input name="password" type="password" placeholder="New password" minlength="8" required><input name="password_confirmation" type="password" placeholder="Confirm password" minlength="8" required><button type="submit">Update password</button></form></td></tr>@empty<tr><td colspan="4">No users found.</td></tr>@endforelse</tbody></table></div>
-</main><script>
+</main><p><a href="{{ route('dashboard.deletions') }}">Check deleted records</a></p><script>
 setInterval(function () {
 	var active = document.activeElement;
 	var editing = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);

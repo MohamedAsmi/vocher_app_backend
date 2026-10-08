@@ -18,7 +18,7 @@
 <body>
 <header><div><strong>Operations dashboard</strong><div style="color:#b8cfca">Voucher review</div></div><form method="post" action="{{ route('dashboard.logout') }}">@csrf<button class="link-button" type="submit">Sign out</button></form></header>
 <main>
-    <nav><a href="{{ route('dashboard') }}">API health</a> | <a href="{{ route('dashboard.vouchers') }}">Voucher review</a></nav>
+    <nav><a href="{{ route('dashboard') }}">Failed requests</a> | <a href="{{ route('dashboard.successful') }}">Successful requests</a> | <a href="{{ route('dashboard.deletions') }}">Deleted entries</a> | <a href="{{ route('dashboard.vouchers') }}">Posted vouchers</a></nav>
     <h1>Voucher review</h1>
     <p class="muted">Filter all manager vouchers by business date and outlet manager.</p>
     <form class="toolbar" method="get">
