@@ -14,7 +14,7 @@ class AuthController extends Controller
 {
     public function login(Request $request): JsonResponse
     {
-        $data = $request->validate(['email' => ['required', 'email'], 'password' => ['required', 'string'], 'deviceName' => ['required', 'string', 'max:100']]);
+        $data = $request->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
         $user = User::where('email', $data['email'])->first();
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages(['email' => ['The provided credentials are incorrect.']]);
@@ -25,7 +25,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'token' => $user->createToken($data['deviceName'])->plainTextToken,
+            'token' => $user->createToken($data['deviceName'] ?? 'api-client')->plainTextToken,
             'user' => $user,
             'role' => $role,
         ]);
