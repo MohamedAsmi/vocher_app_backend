@@ -22,6 +22,7 @@ class AdminUserController extends Controller
             'users' => DB::table('organization_user')
                 ->join('users', 'users.id', '=', 'organization_user.user_id')
                 ->where('organization_user.organization_id', $org)
+                ->whereNull('users.deleted_at')
                 ->orderBy('users.name')
                 ->select('users.id', 'users.name', 'users.email', 'organization_user.role', 'organization_user.active')
                 ->get()
@@ -109,6 +110,16 @@ class AdminUserController extends Controller
         $organizationOutletIds = DB::table('outlets')->where('organization_id', $org)->pluck('id');
         DB::table('outlet_user')->where('user_id', $user->id)->whereIn('outlet_id', $organizationOutletIds)->update(['active' => false, 'updated_at' => now()]);
         $user->tokens()->delete();
+        DB::table('deletion_logs')->insert([
+            'organization_id' => $org,
+            'actor_id' => $request->user()->id,
+            'entity_type' => 'user',
+            'entity_id' => (string) $user->id,
+            'snapshot' => json_encode(['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => DB::table('organization_user')->where(['organization_id' => $org, 'user_id' => $user->id])->value('role')]),
+            'deleted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return response()->json(['ok' => true]);
     }

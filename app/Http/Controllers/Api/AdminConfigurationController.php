@@ -21,6 +21,7 @@ class AdminConfigurationController extends Controller
             DB::table('vouchers')
                 ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
                 ->where('vouchers.organization_id', $org)
+                ->whereNull('vouchers.deleted_at')
                 ->where('vouchers.status', '!=', 'open')
                 ->orderByDesc('vouchers.date_key')
                 ->orderBy('outlets.name')
@@ -50,6 +51,7 @@ class AdminConfigurationController extends Controller
             ->join('outlets', 'outlets.id', '=', 'vouchers.outlet_id')
             ->where('vouchers.organization_id', $org)
             ->where('vouchers.id', $voucher)
+            ->whereNull('vouchers.deleted_at')
             ->select('vouchers.*', 'outlets.name as outlet_name', 'outlets.address as outlet_address')
             ->first();
         abort_unless($row, 404);
@@ -93,17 +95,12 @@ class AdminConfigurationController extends Controller
     public function destroySubmittedVoucher(Request $request, string $org, string $voucher): JsonResponse
     {
         $this->admin($request, $org);
-        $receiptPaths = DB::table('expenses')
-            ->where('voucher_id', $voucher)
-            ->whereNotNull('receipt_path')
-            ->pluck('receipt_path')
-            ->filter()
-            ->all();
-
-        DB::transaction(function () use ($org, $voucher) {
+        $actorId = $request->user()->id;
+        DB::transaction(function () use ($org, $voucher, $actorId) {
             $row = DB::table('vouchers')
                 ->where('organization_id', $org)
                 ->where('id', $voucher)
+                ->whereNull('deleted_at')
                 ->lockForUpdate()
                 ->first();
             abort_unless($row, 404);
@@ -118,12 +115,18 @@ class AdminConfigurationController extends Controller
                     'effective_date_key' => $row->date_key,
                     'updated_at' => now(),
                 ]);
-            DB::table('vouchers')->where('id', $voucher)->delete();
+            DB::table('vouchers')->where('id', $voucher)->update(['deleted_at' => now(), 'updated_at' => now()]);
+            DB::table('deletion_logs')->insert([
+                'organization_id' => $org,
+                'actor_id' => $actorId,
+                'entity_type' => 'voucher',
+                'entity_id' => $voucher,
+                'snapshot' => json_encode((array) $row),
+                'deleted_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         });
-
-        foreach ($receiptPaths as $path) {
-            Storage::disk('public')->delete($path);
-        }
 
         return response()->json(['ok' => true]);
     }
