@@ -20,11 +20,11 @@ class VoucherWorkflowTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $managerToken = $this->postJson('/api/login', [
-            'email' => 'manager@example.test',
-            'password' => 'ChangeMe123!',
+            'email' => 'manager@gmail.com',
+            'password' => 'manager@12345',
             'deviceName' => 'phpunit',
         ])->assertOk()->assertJsonPath('role', 'outletManager')->json('token');
-        $bookkeeperId = DB::table('users')->where('email', 'bookkeeper@example.test')->value('id');
+        $bookkeeperId = DB::table('users')->where('email', 'bookkeeper@gmail.com')->value('id');
         $this->assertSame('bookkeeper', DB::table('organization_user')->where(['organization_id' => 'demo-org', 'user_id' => $bookkeeperId])->value('role'));
         $manager = ['Authorization' => "Bearer {$managerToken}"];
         $this->withHeaders($manager)
@@ -101,8 +101,8 @@ class VoucherWorkflowTest extends TestCase
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();
         $bookkeeperToken = $this->postJson('/api/login', [
-            'email' => 'bookkeeper@example.test',
-            'password' => 'ChangeMe123!',
+            'email' => 'bookkeeper@gmail.com',
+            'password' => 'bookkeeper@12345',
             'deviceName' => 'phpunit',
         ])->assertOk()->assertJsonPath('role', 'bookkeeper')->json('token');
         $this->withHeader('Authorization', "Bearer {$bookkeeperToken}")
@@ -129,8 +129,8 @@ class VoucherWorkflowTest extends TestCase
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();
         $adminToken = $this->postJson('/api/login', [
-            'email' => 'admin@example.test',
-            'password' => 'ChangeMe123!',
+            'email' => 'admin@gmail.com',
+            'password' => 'admin@12345',
             'deviceName' => 'admin-voucher-delete-test',
         ])->assertOk()->json('token');
         $admin = ['Authorization' => 'Bearer '.$adminToken];
@@ -174,8 +174,8 @@ class VoucherWorkflowTest extends TestCase
             ->update(['active' => false]);
 
         $token = $this->postJson('/api/login', [
-            'email' => 'manager@example.test',
-            'password' => 'ChangeMe123!',
+            'email' => 'manager@gmail.com',
+            'password' => 'manager@12345',
             'deviceName' => 'category-filter-test',
         ])->assertOk()->json('token');
 
@@ -193,8 +193,8 @@ class VoucherWorkflowTest extends TestCase
         Notification::fake();
         $this->seed(DatabaseSeeder::class);
         $token = $this->postJson('/api/login', [
-            'email' => 'admin@example.test',
-            'password' => 'ChangeMe123!',
+            'email' => 'admin@gmail.com',
+            'password' => 'admin@12345',
             'deviceName' => 'phpunit-admin',
         ])->assertOk()->assertJsonPath('role', 'admin')->json('token');
         $headers = ['Authorization' => "Bearer {$token}"];
