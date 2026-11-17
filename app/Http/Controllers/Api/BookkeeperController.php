@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class BookkeeperController extends Controller
@@ -136,13 +137,14 @@ class BookkeeperController extends Controller
             'outletName' => $row->outlet_name,
             'dateKey' => $row->date_key,
             'status' => $row->status,
-            'createdAt' => $row->created_at ? \Illuminate\Support\Carbon::parse($row->created_at)->toIso8601String() : null,
-            'submittedAt' => $submittedAt ? \Illuminate\Support\Carbon::parse($submittedAt)->toIso8601String() : null,
-            'approvedAt' => in_array($row->status, ['posted', 'variance'], true) && $row->posted_at ? \Illuminate\Support\Carbon::parse($row->posted_at)->toIso8601String() : null,
+            'createdAt' => $row->created_at ? Carbon::parse($row->created_at)->toIso8601String() : null,
+            'submittedAt' => $submittedAt ? Carbon::parse($submittedAt)->toIso8601String() : null,
+            'approvedAt' => in_array($row->status, ['posted', 'variance'], true) && $row->posted_at ? Carbon::parse($row->posted_at)->toIso8601String() : null,
             'openingFloatMinor' => (int) $row->opening_float_minor,
             'cashSalesMinor' => (int) $row->cash_sales_minor,
             'cardSalesMinor' => (int) $row->card_sales_minor,
             'countedCashMinor' => $row->counted_cash_minor === null ? null : (int) $row->counted_cash_minor,
+            'bankDepositMinor' => (int) ($row->bank_deposit_minor ?? 0),
             'varianceReason' => $row->variance_reason,
             'otherVarianceReason' => $row->other_variance_reason,
             'expenses' => DB::table('expenses')->where('voucher_id', $id)->orderBy('created_at')->get()->map(fn ($expense) => [

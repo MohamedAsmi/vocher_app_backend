@@ -110,7 +110,7 @@ class VoucherController extends Controller
         $data = $request->validate([
             'openingFloatMinor' => ['required', 'integer', 'min:0'],
             'cashSalesMinor' => ['required', 'integer', 'min:0'], 'cardSalesMinor' => ['required', 'integer', 'min:0'],
-            'countedCashMinor' => ['nullable', 'integer', 'min:0'], 'varianceReason' => ['nullable', Rule::in(['rounding', 'tillFloatError', 'uncountedTip', 'other'])],
+            'countedCashMinor' => ['nullable', 'integer', 'min:0'], 'bankDepositMinor' => ['nullable', 'integer', 'min:0'], 'varianceReason' => ['nullable', Rule::in(['rounding', 'tillFloatError', 'uncountedTip', 'other'])],
             'otherVarianceReason' => ['nullable', 'string', 'max:1000'], 'expenses' => ['present', 'array'], 'expenses.*.id' => ['required', 'uuid'],
             'expenses.*.description' => ['required', 'string', 'max:255'], 'expenses.*.categoryId' => ['required', 'string', Rule::exists('expense_categories', 'id')->where(fn ($query) => $query->where('organization_id', $org)->where('active', true))],
             'expenses.*.paymentMethod' => ['required', Rule::in(['cash', 'bankTransfer'])], 'expenses.*.amountMinor' => ['required', 'integer', 'min:1'],
@@ -120,10 +120,13 @@ class VoucherController extends Controller
             'expenses.*.ocrCategoryId' => ['nullable', 'string', 'max:255'],
             'expenses.*.ocrRawText' => ['nullable', 'string', 'max:20000'],
         ]);
-        DB::transaction(function () use ($request, $voucher, $data) {
+        $deposit = (int) ($data['bankDepositMinor'] ?? 0);
+        abort_if($deposit > 0 && ($data['countedCashMinor'] ?? null) === null, 422, 'Count the till before entering a bank deposit.');
+        abort_if($deposit > ($data['countedCashMinor'] ?? 0), 422, 'Bank deposit cannot be more than the counted cash.');
+        DB::transaction(function () use ($request, $voucher, $data, $deposit) {
             $locked = DB::table('vouchers')->where('id', $voucher)->lockForUpdate()->first();
             abort_if($locked->status !== 'open', 409, 'Submitted vouchers are immutable.');
-            DB::table('vouchers')->where('id', $voucher)->update(['opening_float_minor' => $data['openingFloatMinor'], 'cash_sales_minor' => $data['cashSalesMinor'], 'card_sales_minor' => $data['cardSalesMinor'], 'counted_cash_minor' => $data['countedCashMinor'] ?? null, 'variance_reason' => $data['varianceReason'] ?? null, 'other_variance_reason' => $data['otherVarianceReason'] ?? null, 'updated_at' => now()]);
+            DB::table('vouchers')->where('id', $voucher)->update(['opening_float_minor' => $data['openingFloatMinor'], 'cash_sales_minor' => $data['cashSalesMinor'], 'card_sales_minor' => $data['cardSalesMinor'], 'counted_cash_minor' => $data['countedCashMinor'] ?? null, 'bank_deposit_minor' => $deposit, 'variance_reason' => $data['varianceReason'] ?? null, 'other_variance_reason' => $data['otherVarianceReason'] ?? null, 'updated_at' => now()]);
             DB::table('opening_floats')->updateOrInsert(
                 ['outlet_id' => $locked->outlet_id],
                 ['amount_minor' => $data['openingFloatMinor'], 'source_voucher_id' => null, 'effective_date_key' => $locked->date_key, 'updated_at' => now(), 'created_at' => now()],
@@ -158,6 +161,7 @@ class VoucherController extends Controller
             $this->manager($request, $org, $row->outlet_id);
             abort_if($row->status !== 'open', 409, 'Voucher is already submitted.');
             abort_if($row->counted_cash_minor === null, 422, 'Count the till before submitting.');
+            abort_if((int) $row->bank_deposit_minor > (int) $row->counted_cash_minor, 422, 'Bank deposit cannot be more than the counted cash.');
             $mapped = $this->mapVoucher($row);
             $expenses = DB::table('expenses')->where('voucher_id', $voucher)->get()->map(fn ($e) => $this->mapExpense($e))->all();
             $categories = DB::table('expense_categories')->where('organization_id', $org)->get()->keyBy('id')->map(fn ($c) => (array) $c)->all();
@@ -173,7 +177,7 @@ class VoucherController extends Controller
                     DB::table('journals')->insert(['voucher_id' => $voucher, 'type' => $journal['type'], 'line_number' => $i + 1, 'account_code' => $line['accountCode'], 'account_name' => $line['accountName'], 'debit_minor' => $line['debitMinor'], 'credit_minor' => $line['creditMinor'], 'created_at' => now(), 'updated_at' => now()]);
                 }
             }
-            DB::table('opening_floats')->updateOrInsert(['outlet_id' => $row->outlet_id], ['amount_minor' => $row->counted_cash_minor, 'source_voucher_id' => $voucher, 'effective_date_key' => CarbonImmutable::createFromFormat('Ymd', $row->date_key)->addDay()->format('Ymd'), 'updated_at' => now(), 'created_at' => now()]);
+            DB::table('opening_floats')->updateOrInsert(['outlet_id' => $row->outlet_id], ['amount_minor' => $totals['closingTillMinor'], 'source_voucher_id' => $voucher, 'effective_date_key' => CarbonImmutable::createFromFormat('Ymd', $row->date_key)->addDay()->format('Ymd'), 'updated_at' => now(), 'created_at' => now()]);
             DB::table('audit_events')->insert(['voucher_id' => $voucher, 'actor_id' => $request->user()->id, 'action' => 'VOUCHER_SUBMITTED_FOR_REVIEW', 'payload' => json_encode($totals), 'created_at' => now(), 'updated_at' => now()]);
             $result = $this->voucher($voucher);
             DB::table('voucher_operations')->insert(['id' => $data['operationId'], 'voucher_id' => $voucher, 'actor_id' => $request->user()->id, 'result' => json_encode($result), 'created_at' => now(), 'updated_at' => now()]);
@@ -234,7 +238,7 @@ class VoucherController extends Controller
             ->where('action', 'VOUCHER_SUBMITTED_FOR_REVIEW')
             ->max('created_at');
 
-        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at ? Carbon::parse($v->created_at)->toIso8601String() : null, 'submittedAt' => $submittedAt ? Carbon::parse($submittedAt)->toIso8601String() : null, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) && $v->posted_at ? Carbon::parse($v->posted_at)->toIso8601String() : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
+        return ['id' => $v->id, 'outletId' => $v->outlet_id, 'outletName' => $v->outlet_name ?? '', 'outletAddress' => $v->outlet_address ?? null, 'dateKey' => $v->date_key, 'status' => $v->status, 'createdAt' => $v->created_at ? Carbon::parse($v->created_at)->toIso8601String() : null, 'submittedAt' => $submittedAt ? Carbon::parse($submittedAt)->toIso8601String() : null, 'approvedAt' => in_array($v->status, ['posted', 'variance'], true) && $v->posted_at ? Carbon::parse($v->posted_at)->toIso8601String() : null, 'openingFloatMinor' => (int) $v->opening_float_minor, 'cashSalesMinor' => (int) $v->cash_sales_minor, 'cardSalesMinor' => (int) $v->card_sales_minor, 'countedCashMinor' => $v->counted_cash_minor === null ? null : (int) $v->counted_cash_minor, 'bankDepositMinor' => (int) ($v->bank_deposit_minor ?? 0), 'varianceReason' => $v->variance_reason, 'otherVarianceReason' => $v->other_variance_reason];
     }
 
     private function mapExpense(object $e): array

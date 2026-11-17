@@ -159,6 +159,56 @@ class VoucherWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_bank_deposit_sets_closing_till_and_posts_deposit_journal(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $token = $this->postJson('/api/login', [
+            'email' => 'manager@gmail.com',
+            'password' => 'manager@12345',
+            'deviceName' => 'phpunit',
+        ])->assertOk()->json('token');
+        $manager = ['Authorization' => "Bearer {$token}"];
+        $voucher = $this->withHeaders($manager)
+            ->postJson('/api/organizations/demo-org/outlets/outlet_001/vouchers/today')
+            ->assertOk()
+            ->json();
+        $payload = [
+            'openingFloatMinor' => 440000,
+            'cashSalesMinor' => 22650000,
+            'cardSalesMinor' => 1130000,
+            'countedCashMinor' => 1071000,
+            'varianceReason' => null,
+            'otherVarianceReason' => null,
+            'expenses' => [[
+                'id' => (string) Str::uuid(),
+                'description' => 'Chicken',
+                'categoryId' => 'raw_materials',
+                'paymentMethod' => 'cash',
+                'amountMinor' => 22019000,
+                'receiptId' => null,
+            ]],
+        ];
+
+        $this->withHeaders($manager)
+            ->putJson("/api/organizations/demo-org/vouchers/{$voucher['id']}", $payload + ['bankDepositMinor' => 1071001])
+            ->assertStatus(422);
+        $this->withHeaders($manager)
+            ->putJson("/api/organizations/demo-org/vouchers/{$voucher['id']}", $payload + ['bankDepositMinor' => 631000])
+            ->assertOk()
+            ->assertJsonPath('bankDepositMinor', 631000);
+
+        $this->withHeaders($manager)
+            ->postJson("/api/organizations/demo-org/vouchers/{$voucher['id']}/submit", ['operationId' => (string) Str::uuid()])
+            ->assertOk()
+            ->assertJsonPath('status', 'pending_review')
+            ->assertJsonPath('bankDepositMinor', 631000);
+
+        // Closing till (counted 10,710 - deposited 6,310 = 4,400) becomes tomorrow's opening float.
+        $this->assertDatabaseHas('opening_floats', ['outlet_id' => 'outlet_001', 'amount_minor' => 440000]);
+        $this->assertDatabaseHas('journals', ['voucher_id' => $voucher['id'], 'type' => 'deposit', 'account_name' => 'Bank', 'debit_minor' => 631000]);
+        $this->assertDatabaseHas('journals', ['voucher_id' => $voucher['id'], 'type' => 'deposit', 'account_name' => 'Cash', 'credit_minor' => 631000]);
+    }
+
     public function test_unauthenticated_requests_are_rejected(): void
     {
         $this->postJson('/api/organizations/demo-org/outlets/outlet_001/vouchers/today')

@@ -11,8 +11,11 @@ class VoucherAccounting
         $cash = array_sum(array_column(array_filter($expenses, fn ($e) => $e['paymentMethod'] === 'cash'), 'amountMinor'));
         $bank = array_sum(array_column(array_filter($expenses, fn ($e) => $e['paymentMethod'] === 'bankTransfer'), 'amountMinor'));
         $expected = $voucher['openingFloatMinor'] + $voucher['cashSalesMinor'] - $cash;
+        $deposit = (int) ($voucher['bankDepositMinor'] ?? 0);
 
         return [
+            'bankDepositMinor' => $deposit,
+            'closingTillMinor' => $voucher['countedCashMinor'] === null ? null : $voucher['countedCashMinor'] - $deposit,
             'cashExpensesMinor' => $cash,
             'bankExpensesMinor' => $bank,
             'totalExpensesMinor' => $cash + $bank,
@@ -64,7 +67,15 @@ class VoucherAccounting
             $expenseLines[] = $this->line('Cash Short / Over', 0, $totals['varianceMinor']);
         }
 
-        return [$this->journal('sales', $sales), $this->journal('expenses', $expenseLines)];
+        $journals = [$this->journal('sales', $sales), $this->journal('expenses', $expenseLines)];
+        if ($totals['bankDepositMinor'] > 0) {
+            $journals[] = $this->journal('deposit', [
+                $this->line('Bank', $totals['bankDepositMinor'], 0),
+                $this->line('Cash', 0, $totals['bankDepositMinor']),
+            ]);
+        }
+
+        return $journals;
     }
 
     private function line(string $name, int $debit, int $credit, ?string $code = null): array

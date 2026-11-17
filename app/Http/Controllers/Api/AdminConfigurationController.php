@@ -7,7 +7,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -75,6 +74,7 @@ class AdminConfigurationController extends Controller
             'cashSalesMinor' => (int) $row->cash_sales_minor,
             'cardSalesMinor' => (int) $row->card_sales_minor,
             'countedCashMinor' => $row->counted_cash_minor === null ? null : (int) $row->counted_cash_minor,
+            'bankDepositMinor' => (int) ($row->bank_deposit_minor ?? 0),
             'varianceReason' => $row->variance_reason,
             'otherVarianceReason' => $row->other_variance_reason,
             'expenses' => DB::table('expenses')->where('voucher_id', $voucher)->orderBy('created_at')->get()->map(fn ($expense) => [
